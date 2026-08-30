@@ -74,7 +74,7 @@
       "tolerance": 0,
       "tracking_issue": 31,
       "unsupported_feature": "floor_slab_extrusion_thickness",
-      "notes": "rvt-rs recovers plan-loop IFCSLAB annotations (boundary only); the paired IFC uses IFCSHADINGDEVICE."
+      "notes": "Production path recovers plan-loop IFCSLAB annotations (boundary only); paired IFC uses IFCSHADINGDEVICE."
     },
     "roofs": {
       "status": "known",
@@ -105,14 +105,16 @@
       "tolerance": 0,
       "tracking_issue": 33,
       "unsupported_feature": "typed_door_window_discrimination_and_host_binding",
-      "notes": "rvt-rs strict partition space-name recovery emits 18 IFCSPACE; the paired IFC has 0."
+      "notes": "Strict partition space-name recovers emit IFCSPACE; paired IFC has 0 spaces."
     },
     "columns": {
-      "status": "known",
+      "status": "decoder_baseline",
       "expected": 0,
       "source": "paired Revit IFC export",
       "source_ifc_type": "IFCCOLUMN",
-      "tolerance": 0
+      "tolerance": 0,
+      "tracking_issue": 204,
+      "notes": "The paired 20 KB element fixture carries no IFCCOLUMN; the same .rvt carries 256, which is scored against the full export in the sibling manifest magnetar-2024-core-interior-slim. Recorded as a decoder baseline here so the reference side stays the element fixture and the count is not double-claimed."
     },
     "beams": {
       "status": "known",
@@ -136,7 +138,7 @@
       "tolerance": 0,
       "tracking_issue": 34,
       "unsupported_feature": "revit_compound_assemblies_and_walltype_widths",
-      "notes": "rvt-rs recovers 102 partition display-name materials; the paired IFC expects 1. Compound assemblies and WallType widths remain open."
+      "notes": "Partition display-name Materials recover into IfcMaterial; compound assemblies / WallType widths remain open. Paired IFC expects only 1. Decoder baseline 102 after Finding 1 gated Partitions/Global strip (was 92±5)."
     },
     "units": {
       "status": "known",
@@ -153,7 +155,7 @@
       "tolerance": 0,
       "tracking_issue": 35,
       "unsupported_feature": "typed_door_window_discrimination_and_host_binding",
-      "notes": "rvt-rs emits 64 RvtFloorGeometry property sets for plan-loop slabs (boundary annotation only); not a match for the paired IFC inventory."
+      "notes": "Current decoder emits RvtFloorGeometry property sets for plan-loop slabs (boundary annotation) plus RvtColumnGeometry sets for the 256 recovered columns (#204); not a match for the paired IFC property-set inventory."
     }
   },
   "semantic_surface": [
@@ -161,7 +163,6 @@
     "entity_counts.IFCROOF",
     "entity_counts.IFCDOOR",
     "entity_counts.IFCWINDOW",
-    "entity_counts.IFCCOLUMN",
     "entity_counts.IFCBEAM",
     "entity_counts.IFCFLOWTERMINAL",
     "entity_counts.IFCUNITASSIGNMENT"
@@ -180,6 +181,13 @@
       "reason": "known_gap",
       "tracking_issue": 33,
       "unsupported_feature": "typed_door_window_discrimination_and_host_binding"
+    },
+    {
+      "category": "columns",
+      "field": "entity_counts.IFCCOLUMN",
+      "reason": "decoder_baseline",
+      "tracking_issue": 204,
+      "unsupported_feature": null
     },
     {
       "category": "materials",

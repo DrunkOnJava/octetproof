@@ -6,7 +6,10 @@ name: OctetProof verdict
 #   1. fetches the bridge file from its public origin and verifies its
 #      SHA-256 against the manifest (the corpus never redistributes bytes);
 #   2. runs every bridge witness the manifest marks `ci-runnable` and the
-#      registry marks `adopted`, each in a pinned version;
+#      registry marks `adopted`, each in a pinned version — IfcOpenShell from
+#      PyPI, and IFClite built from the vendored glue in witnesses/ifc-lite
+#      against a pinned, out-of-workspace MPL-2.0 crate. Both are separate
+#      processes; the umbrella still parses no format bytes itself;
 #   3. compares the fresh observations against the committed source-witness
 #      observation. The umbrella never builds a decoder: the rvt-rs
 #      observation is committed from the rvt-rs repository, where
@@ -87,6 +90,20 @@ jobs:
         with:
           python-version: "3.12"
 
+      # The only Rust in this repository is witnesses/ifc-lite, the glue that
+      # drives the IFClite reader. It needs >= 1.87 (ifc-lite-core calls
+      # `usize::is_multiple_of`), so `stable` rather than a pinned old MSRV.
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+
+      # §10.4: caching is permitted for witness builds because the §9.6 pin,
+      # the committed Cargo.lock and `--locked` decide what is built, not the
+      # cache.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: witnesses/ifc-lite
+
       # §6.1/§8.4: the golden bridge file is fetched from its recorded public
       # origin and is only accepted if it hashes to the value the manifest
       # names. The corpus stores the hash, never the bytes.
@@ -97,10 +114,13 @@ jobs:
             --which bridge \
             --out "_work/${{ matrix.artifact }}/bridge.bin"
 
-      # §9.6: the bridge witness is installed at the version the manifest
-      # pins. IfcOpenShell ships prebuilt wheels on PyPI; it runs as a
-      # separate process and is never linked into anything (§9.2, LGPL-3.0).
-      - name: Install adopted, CI-runnable bridge witnesses
+      # §9.6: each bridge witness is installed or built at the version the
+      # manifest pins, and only if the registry marks it `adopted`.
+      # IfcOpenShell ships prebuilt wheels on PyPI; it runs as a separate
+      # process and is never linked into anything (§9.2, LGPL-3.0). The
+      # `cargo` witnesses are built below, out of workspace, for the same
+      # reason (§9.2, MPL-2.0).
+      - name: Install adopted, CI-runnable Python bridge witnesses
         run: |
           python3 - <<'PY' > _pins.txt
           import json
@@ -112,10 +132,30 @@ jobs:
               entry = r.get(w["witness_id"])
               assert entry is not None, f"{w['witness_id']} is not in the registry"
               assert entry["status"] == "adopted", f"{w['witness_id']} is {entry['status']}, not adopted"
-              print(w["version_pin"])
+              if w.get("runner_kind", "python") == "python":
+                  print(w["version_pin"])
           PY
           python3 -m pip install --upgrade pip
           python3 -m pip install --requirement _pins.txt
+
+      # `--locked` plus the committed Cargo.lock pins the transitive tree too;
+      # tools/check-registry.py has already refused the build if the Cargo
+      # pin, the registry version, the manifest `version_pin` and the
+      # binary's own WITNESS_VERSION are not one number.
+      - name: Build adopted, CI-runnable cargo bridge witnesses
+        run: |
+          python3 - <<'PY' > _cargo.txt
+          import json
+          m = json.load(open("corpus/artifacts/${{ matrix.artifact }}/manifest.json"))
+          for w in m["witnesses"]["bridge"]:
+              if w.get("mode") == "ci-runnable" and w.get("runner_kind") == "cargo":
+                  print(w["runner"])
+          PY
+          while read -r runner; do
+            [ -n "$runner" ] || continue
+            echo "building cargo witness glue: $runner"
+            cargo build --release --locked --manifest-path "$runner/Cargo.toml"
+          done < _cargo.txt
 
       # §6.2: each runnable bridge witness emits a canonical observation.
       - name: Run bridge witnesses
@@ -126,15 +166,30 @@ jobs:
           m = json.load(open("corpus/artifacts/${{ matrix.artifact }}/manifest.json"))
           for w in m["witnesses"]["bridge"]:
               if w.get("mode") == "ci-runnable":
-                  print(w["witness_id"], w["runner"])
+                  print(w["witness_id"], w.get("runner_kind", "python"), w["runner"])
           PY
-          while read -r wid runner; do
+          while read -r wid kind runner; do
             [ -n "$wid" ] || continue
-            echo "bridge witness: $wid ($runner)"
-            python3 "$runner" \
-              "corpus/artifacts/${{ matrix.artifact }}/manifest.json" \
-              "_work/${{ matrix.artifact }}/bridge.bin" \
-              --observation "_work/${{ matrix.artifact }}/observations/$wid.json"
+            echo "bridge witness: $wid ($kind, $runner)"
+            case "$kind" in
+              python)
+                python3 "$runner" \
+                  "corpus/artifacts/${{ matrix.artifact }}/manifest.json" \
+                  "_work/${{ matrix.artifact }}/bridge.bin" \
+                  --observation "_work/${{ matrix.artifact }}/observations/$wid.json"
+                ;;
+              cargo)
+                bin=$(python3 -c 'import sys,tomllib; print(tomllib.load(open(sys.argv[1],"rb"))["package"]["name"])' "$runner/Cargo.toml")
+                "$runner/target/release/$bin" \
+                  "corpus/artifacts/${{ matrix.artifact }}/manifest.json" \
+                  "_work/${{ matrix.artifact }}/bridge.bin" \
+                  --observation "_work/${{ matrix.artifact }}/observations/$wid.json"
+                ;;
+              *)
+                echo "error: unknown runner_kind '$kind' for witness $wid" >&2
+                exit 1
+                ;;
+            esac
           done < _runners.txt
 
       # Layer 5 boundary: the source witness observation is committed from

@@ -5,6 +5,10 @@ _work/
 .venv/
 _pins.txt
 _runners.txt
+_cargo.txt
+
+# The vendored ifc-lite witness glue is built, not committed as a binary.
+witnesses/*/target/
 
 __pycache__/
 *.py[cod]

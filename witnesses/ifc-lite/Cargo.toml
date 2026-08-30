@@ -1,0 +1,34 @@
+[package]
+name = "witness-ifc-lite"
+version = "0.1.0"
+edition = "2021"
+# Mirrored from tools/ci/witness-ifc-lite/ in DrunkOnJava/rvt-rs at commit
+# dbf23473e1be62cb8ed1a4fb552396c31899df9c (PR #205). Only the
+# manifest-reading code path in src/main.rs differs, to read the umbrella's
+# §6.1 manifest shape instead of the rvt-rs project-count fixture; the pin,
+# the counting, the canonicalization and the observation shape are unchanged.
+#
+# NOT the rvt-rs workspace MSRV (1.85). ifc-lite-core 7.1.1 calls
+# `usize::is_multiple_of`, stabilised in Rust 1.87, so this witness needs a
+# newer toolchain. The umbrella has no other Rust and pins `stable` in
+# .github/workflows/verdict.yml, so this costs nothing here.
+rust-version = "1.87"
+license = "Apache-2.0"
+publish = false
+description = "Third independent IFC reading witness for the OctetProof gate: counts IFC entity instances with ifc-lite-core and emits a canonical observation."
+
+# Deliberately its own workspace root, and the only Rust in this repository.
+# ifc-lite-core is MPL-2.0; SPEC.md §9.2 requires third-party witnesses to run
+# as separate processes and never to be linked into the Apache-2.0 tree.
+# Nothing else here is built by cargo, so MPL-licensed code cannot reach a
+# shipped artifact.
+[workspace]
+
+[dependencies]
+# Pinned by exact version (OctetProof §9.6 — floating ranges are forbidden for
+# a witness). Bumping this pin must also update WITNESS_VERSION in src/main.rs,
+# the `version` field of the `ifc-lite` witness in registry/witnesses.json, and
+# every corpus manifest's `version_pin`; tools/check-registry.py enforces that.
+ifc-lite-core = "=7.1.1"
+serde_json = "1"
+sha2 = "0.10"

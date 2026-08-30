@@ -8,9 +8,43 @@ witnesses as separate processes, and compare the JSON those witnesses emit.
 No `.rvt`, `.dwg` or `.ifc` is decoded by anything in this directory.
 
 **Python 3.12 standard library only**, plus the witnesses themselves
-(IfcOpenShell today, installed at run time and executed as a subprocess). The
-replay protocol's value is that a stranger can run it years from now; every
-added dependency is a reason it will not.
+(IfcOpenShell and IFClite today, installed or built at run time and executed
+as subprocesses). The replay protocol's value is that a stranger can run it
+years from now; every added dependency is a reason it will not.
+
+## Witness glue lives in `witnesses/`, not here
+
+A witness that is not a Python package needs a small program to drive it and
+turn its answer into a §6.2 observation. That glue is not part of the gate,
+so it does not live in this directory:
+
+| Path | Drives | License of the reader |
+|---|---|---|
+| `tools/witness-ifcopenshell.py` | IfcOpenShell, installed from PyPI | LGPL-3.0 |
+| `witnesses/ifc-lite/` | IFClite — the `ifc-lite-core` crate, pinned `=7.1.1` | MPL-2.0 |
+
+`witnesses/ifc-lite/` is **mirrored from `tools/ci/witness-ifc-lite/` in
+DrunkOnJava/rvt-rs at commit `dbf23473e1be62cb8ed1a4fb552396c31899df9c`**
+(PR #205), and the file headers say so. The only change is the
+manifest-reading code path, which reads the umbrella's §6.1 manifest shape
+(`bridge.file_hash_sha256` / `bridge.bytes` / `bridge.schema`, and the bridge
+file passed directly) instead of the rvt-rs project-count fixture shape. The
+counting, the canonicalization, the hashing, the manifest-drift check and the
+observation shape are unchanged, which is why the two repositories' committed
+observations hash identically. Keep them in sync.
+
+**This is glue, not a decoder.** It is ~300 lines of argument parsing,
+hashing and JSON. Every byte of IFC is parsed by `ifc-lite-core`, a
+third-party crate, inside a separate process, from its own workspace root so
+that MPL-2.0 code is never linked into this Apache-2.0 tree (§9.2). The
+umbrella still parses no format bytes itself.
+
+A manifest's bridge witness declares `runner_kind` — `python` or `cargo` —
+which says only how the runner is invoked. `tools/replay.sh` and the CI gate
+dispatch on it; `cargo` runners are built with `--locked` against a committed
+`Cargo.lock`, and `tools/check-registry.py` refuses to proceed unless the
+registry version, the Cargo pin, the manifest `version_pin` and the binary's
+own `WITNESS_VERSION` are one number (§9.6).
 
 | Tool | Does |
 |---|---|
@@ -20,7 +54,7 @@ added dependency is a reason it will not.
 | `compare-verdict.py` | fresh verdict against the committed record (§13 step 6) |
 | `replay.sh` | all of the above end to end, for one artifact |
 | `validate-corpus.py` | observations and verdicts against the 1.0.0 schemas, plus hash self-consistency |
-| `check-registry.py` | registry against its schema, plus cross-references the schema cannot express |
+| `check-registry.py` | registry against its schema, cross-references the schema cannot express, and the §9.6 pin chain for every witness this repository builds |
 | `index.py` | rebuild or check `corpus/MANIFEST_INDEX.json` (§12.2) |
 | `jsonschema_mini.py` | the JSON Schema subset the two validators use; not a general engine |
 
@@ -28,12 +62,16 @@ added dependency is a reason it will not.
 
 ```bash
 tools/replay.sh                                # defaults to g-2026-0001
-tools/replay.sh corpus/artifacts/g-2026-0001   # explicit
+tools/replay.sh corpus/artifacts/g-2026-0002   # explicit
 OCTETPROOF_PYTHON=python3.12 tools/replay.sh   # if your default python3 has no IfcOpenShell wheels
 ```
 
 Exits non-zero unless the verdict is PASS, every observation replays
 byte-for-byte, and the fresh verdict matches the committed one. Fail-closed.
+
+Requirements: `python3` >= 3.12, and — because a manifest now names a `cargo`
+witness — a Rust toolchain >= 1.87. `ifc-lite-core` 7.1.1 calls
+`usize::is_multiple_of`, stabilised in 1.87; the CI gate installs `stable`.
 
 ## Statuses
 
@@ -70,7 +108,8 @@ is a major version bump of the spec (§16.1).
 
 ## What is deliberately not here
 
-- **No decoder.** Layer 5 lives in its own repositories.
+- **No decoder.** Layer 5 lives in its own repositories. `witnesses/ifc-lite`
+  is a driver for a third-party reader, not a reader.
 - **No container isolation** (§10.3). Witnesses run as subprocesses on the
   runner, not in per-witness containers with resource limits and no network.
 - **No Ed25519 chain-root signature** (§12.2). The chain exists; the signature

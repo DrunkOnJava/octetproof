@@ -13,6 +13,7 @@ corpus/
       PROVENANCE.md            what is recorded and what is not
       observations/            SPEC.md §6.2 — one per witness, committed
       verdict.json             SPEC.md §6.3 — the recorded decision
+    g-2026-0002/               same shape, same .rvt, the full project export
 ```
 
 Artifact ids are `g-YYYY-NNNN`, assigned in order. An artifact is immutable
@@ -67,7 +68,8 @@ driven by the umbrella's different job:
 |---|---|
 | `artifact_id` + `alias` instead of `id` | the umbrella assigns `g-YYYY-NNNN`; `alias` keeps the id the decoder repository uses, so observations from either side resolve. See the artifact's PROVENANCE.md. |
 | `source` / `bridge` blocks carry `origin`, `license` and `bytes` | the corpus fetches by hash instead of committing bytes; without an origin an artifact is not replayable |
-| the `decoder_*` fields are dropped | they are the decoder repository's own regression baseline, which the gate explicitly ignores (§6.1). Categories that exist only as decoder baselines — `levels` in this manifest's upstream — are dropped with them |
+| the `decoder_*` fields are dropped | they are the decoder repository's own regression baseline, which the gate explicitly ignores (§6.1). A category that exists *only* as a decoder baseline goes with them — `levels` in g-2026-0001's upstream, which carries no `source_ifc_type` and so no bridge witness can see it. Where the same category does carry a `source_ifc_type`, as `levels` does in g-2026-0002, it stays: it is a real cross-witness observation (15 exported storeys against 12 recovered) and is excluded first-class rather than dropped. Dropping it would hide a measured disagreement behind a formatting rule |
+| `octetproof_version` names the protocol document each manifest was authored against | g-2026-0001 says `1.0.0`, g-2026-0002 says `1.0.1`. 1.0.1 is a patch release with no schema, diff-function or provenance change (SPEC.md §19a), so the two conform identically; the field records history rather than a difference in obligations, and an immutable manifest is not rewritten to chase a patch number |
 
 Everything the gate reads is unchanged: the normative `counts` block, with
 `source_ifc_type`, `status` (`known` / `known_gap` / `unsupported`),
@@ -82,10 +84,25 @@ what is being claimed.
 
 ## What is in the corpus today
 
-One artifact. See the top-level [README](../README.md#what-exists-today) for
-what it is worth, and
-[g-2026-0001/PROVENANCE.md](artifacts/g-2026-0001/PROVENANCE.md) for what is
-not recorded about it.
+Two artifacts, one edge, three witnesses.
+
+| Artifact | Alias | Bridge file | Verdict |
+|---|---|---|---|
+| `g-2026-0001` | magnetar-2024-core-interior | `2024_Core_Interior.ifc`, 20,392 bytes — an element-export fixture | PASS, 8 surface fields, 4 excluded |
+| `g-2026-0002` | magnetar-2024-core-interior-slim | `2024_Core_Interior_slim.ifc`, 1,665,968 bytes — the full project export | PASS, 4 surface fields, 9 excluded |
+
+**They share the same `.rvt` and the same committed rvt-rs observation.** Only
+the Revit-authored bridge file differs, which makes the pair a direct measure
+of how much of the first artifact's agreement was real: the second has a
+narrower surface and five times the exclusions, because the full export shows
+360 walls, 132 doors, 256 columns, 116 spaces and 80 slabs where rvt-rs
+recovers 0, 0, 0, 18 and 64.
+
+See the top-level [README](../README.md#what-exists-today) for what that is
+worth, and each artifact's PROVENANCE.md
+([g-2026-0001](artifacts/g-2026-0001/PROVENANCE.md),
+[g-2026-0002](artifacts/g-2026-0002/PROVENANCE.md)) for what is not recorded
+about it.
 
 ## Adding one
 

@@ -9,8 +9,9 @@
 # What it does:
 #   1. Fetch the bridge file from its public origin and verify its SHA-256
 #      against the manifest. The corpus never redistributes those bytes.
-#   2. Create a venv and install the registry-pinned bridge witness
-#      (IfcOpenShell) into it.
+#   2. Create a venv and install the registry-pinned Python bridge witness
+#      (IfcOpenShell) into it, and `cargo build --locked` every pinned cargo
+#      bridge witness glue (IFClite) the manifest names.
 #   3. Run every `ci-runnable` bridge witness the manifest names; each writes
 #      a fresh observation.
 #   4. Copy in the committed source-witness observation. The umbrella never
@@ -25,7 +26,8 @@
 # Exits non-zero unless the verdict is PASS, every replay entry is `match`,
 # and the fresh verdict agrees with the committed one. Fail-closed.
 #
-# Dependencies: bash, python3 (>=3.12), network access for step 1 and 2.
+# Dependencies: bash, python3 (>=3.12), a Rust toolchain >= 1.87 if the
+# manifest names a `cargo` bridge witness, and network access for steps 1-2.
 
 set -euo pipefail
 
@@ -64,19 +66,38 @@ echo "== installing bridge witness: $PIN"
 "$VENV/bin/python" -m pip install --quiet "$PIN"
 
 # --- 3. run each ci-runnable bridge witness --------------------------------
+# `runner_kind` says how the runner is invoked, never what it means: `python`
+# runs under the venv above, `cargo` is glue this repository builds from a
+# pinned, out-of-workspace crate and executes as its own process. Either way
+# the umbrella parses no format bytes itself — the witness process does, and
+# tools/check-registry.py holds the §9.6 pin to one number.
 python3 -c '
 import json,sys
 m=json.load(open(sys.argv[1]))
 for w in m["witnesses"]["bridge"]:
     if w.get("mode")=="ci-runnable":
-        print(w["witness_id"], w["runner"])
+        print(w["witness_id"], w.get("runner_kind","python"), w["runner"])
 ' "$MANIFEST" > "$WORK_DIR/bridge-witnesses.txt"
 
-while read -r WID RUNNER; do
+while read -r WID KIND RUNNER; do
   [ -n "$WID" ] || continue
-  echo "== bridge witness: $WID ($RUNNER)"
-  "$VENV/bin/python" "$REPO_ROOT/$RUNNER" "$MANIFEST" "$BRIDGE_FILE" \
-    --observation "$WORK_DIR/observations/$WID.json"
+  echo "== bridge witness: $WID ($KIND, $RUNNER)"
+  case "$KIND" in
+    python)
+      "$VENV/bin/python" "$REPO_ROOT/$RUNNER" "$MANIFEST" "$BRIDGE_FILE" \
+        --observation "$WORK_DIR/observations/$WID.json"
+      ;;
+    cargo)
+      cargo build --release --locked --manifest-path "$REPO_ROOT/$RUNNER/Cargo.toml"
+      BIN_NAME="$(python3 -c 'import sys,tomllib; print(tomllib.load(open(sys.argv[1],"rb"))["package"]["name"])' "$REPO_ROOT/$RUNNER/Cargo.toml")"
+      "$REPO_ROOT/$RUNNER/target/release/$BIN_NAME" "$MANIFEST" "$BRIDGE_FILE" \
+        --observation "$WORK_DIR/observations/$WID.json"
+      ;;
+    *)
+      echo "error: unknown runner_kind '$KIND' for witness $WID" >&2
+      exit 1
+      ;;
+  esac
 done < "$WORK_DIR/bridge-witnesses.txt"
 
 # --- 4. committed source-witness observation -------------------------------

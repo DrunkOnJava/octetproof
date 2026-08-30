@@ -65,7 +65,7 @@
       "source": "paired Revit IFC export",
       "source_ifc_type": "IFCBUILDINGSTOREY",
       "tolerance": 0,
-      "notes": "Changed 2026-08-30 (#218, RE-24): the storeys are now the Revit Level elements themselves \u2014 rvt-rs reads the fifteen standalone OST_Levels partition records and, for each, the name/elevation parameter block whose owner slot carries that Level's own ElementId. The count moved 11 \u2192 15 and every (name, elevation) pair equals an IfcBuildingStorey in this export exactly, so the row moved from decoder_baseline to known. This 20 KB element fixture carries the full fifteen-storey spatial hierarchy even though it carries one building element, so the reference side is authoritative here as well as on the sibling full-project manifest. Previously (#213) the elevations came from the partition element-record bbox base-z distribution, which saw only the eleven storeys that have a column standing on them."
+      "notes": "Changed 2026-08-30 (#218, RE-24): the storeys are now the Revit Level elements themselves — rvt-rs reads the fifteen standalone OST_Levels partition records and, for each, the name/elevation parameter block whose owner slot carries that Level's own ElementId. The count moved 11 → 15 and every (name, elevation) pair equals an IfcBuildingStorey in this export exactly, so the row moved from decoder_baseline to known. This 20 KB element fixture carries the full fifteen-storey spatial hierarchy even though it carries one building element, so the reference side is authoritative here as well as on the sibling full-project manifest. Previously (#213) the elevations came from the partition element-record bbox base-z distribution, which saw only the eleven storeys that have a column standing on them."
     },
     "walls": {
       "status": "decoder_baseline",
@@ -151,7 +151,7 @@
       "tolerance": 0,
       "tracking_issue": 34,
       "unsupported_feature": "revit_compound_assemblies_and_walltype_widths",
-      "notes": "Partition display-name Materials recover into IfcMaterial; compound assemblies / WallType widths remain open. Paired IFC expects only 1. Decoder baseline 102 after Finding 1 gated Partitions/Global strip (was 92\u00b15)."
+      "notes": "Partition display-name Materials recover into IfcMaterial; compound assemblies / WallType widths remain open. Paired IFC expects only 1. Decoder baseline 102 after Finding 1 gated Partitions/Global strip (was 92±5)."
     },
     "units": {
       "status": "known",
@@ -197,7 +197,7 @@
       "expected_storeys": 15,
       "source": "paired Revit IFC export",
       "tracking_issue": 218,
-      "notes": "Added 2026-08-30 (#218, RE-24). The compared value is the exact set of [Name, Elevation] pairs, elevation converted from each file's declared LENGTHUNIT to feet and rendered at 1e-6 ft \u2014 this export declares FOOT while rvt-rs writes METRE, so the field would be incomparable without the conversion. All three witnesses read it independently: IfcOpenShell 0.8.5 by_type + ifcopenshell.util.unit, IFClite 7.1.1 EntityScanner + extract_length_unit_scale, and rvt-rs by splitting its own emitted STEP. rvt-rs recovers the pair from the .rvt: the fifteen standalone OST_Levels partition element records give the Level ElementIds, and each Level's name/elevation parameter block is keyed by that ElementId at a fixed negative offset (owner at value-0x47), so nothing is joined by rank. Measured on this artifact: 15 of 15 pairs reproduced exactly - no wrong elevation, no missing storey, no extra storey."
+      "notes": "Added 2026-08-30 (#218, RE-24). The compared value is the exact set of [Name, Elevation] pairs, elevation converted from each file's declared LENGTHUNIT to feet and rendered at 1e-6 ft — this export declares FOOT while rvt-rs writes METRE, so the field would be incomparable without the conversion. All three witnesses read it independently: IfcOpenShell 0.8.5 by_type + ifcopenshell.util.unit, IFClite 7.1.1 EntityScanner + extract_length_unit_scale, and rvt-rs by splitting its own emitted STEP. rvt-rs recovers the pair from the .rvt: the fifteen standalone OST_Levels partition element records give the Level ElementIds, and each Level's name/elevation parameter block is keyed by that ElementId at a fixed negative offset (owner at value-0x47), so nothing is joined by rank. Measured on this artifact: 15 of 15 pairs reproduced exactly - no wrong elevation, no missing storey, no extra storey."
     }
   },
   "semantic_surface": [
@@ -205,8 +205,7 @@
     "entity_counts.IFCROOF",
     "entity_counts.IFCBEAM",
     "entity_counts.IFCFLOWTERMINAL",
-    "entity_counts.IFCUNITASSIGNMENT",
-    "storeys.IFCBUILDINGSTOREY"
+    "entity_counts.IFCUNITASSIGNMENT"
   ],
   "excluded": [
     {
@@ -271,14 +270,7 @@
       "reason": "decoder_baseline",
       "tracking_issue": 212,
       "unsupported_feature": null
-    },
-    {
-      "category": "opening_fills",
-      "field": "relations.IFCRELFILLSELEMENT",
-      "reason": "decoder_baseline",
-      "tracking_issue": 222,
-      "unsupported_feature": null
     }
   ],
-  "notes": "`counts`, `relations` and `storeys` are the normative SPEC.md \u00a76.1 blocks and are what the gate reads; `semantic_surface` and `excluded` are the declared result, and tools/verdict.py fails with MANIFEST_ERROR if they disagree with what those blocks imply \u2014 so an accidental status flip is loud rather than a silent surface change. Tracking issues 33/34/35/204/211/212/218/222 are rvt-rs issues (github.com/DrunkOnJava/rvt-rs). Departing from the upstream rvt-rs manifest exactly as corpus/README.md documents, the `decoder_*` fields are dropped and a category that carries no cross-witness type key is dropped with them. The bridge file is a 20 KB element-export fixture, not a full project schedule, so four of the six agreeing surface fields are zero counts \u2014 but Revit writes the complete fifteen-storey spatial hierarchy into it even so, which is why `entity_counts.IFCBUILDINGSTOREY` and `storeys.IFCBUILDINGSTOREY` are `known` here and carry the same fifteen (name, elevation) pairs the full export does. `relations.IFCRELFILLSELEMENT` goes the other way: this fixture carries no IfcRelFillsElement at all, so the relation is excluded first-class and is scored only on the sibling full-project artifact. See PROVENANCE.md."
+  "notes": "`counts`, `relations` and `storeys` are the normative SPEC.md §6.1 blocks and are what the gate reads; `semantic_surface` and `excluded` are the declared result, and tools/verdict.py fails with MANIFEST_ERROR if they disagree with what those blocks imply — so an accidental status flip is loud rather than a silent surface change. Tracking issues 33/34/35/204/211/212/218/222 are rvt-rs issues (github.com/DrunkOnJava/rvt-rs). Departing from the upstream rvt-rs manifest exactly as corpus/README.md documents, the `decoder_*` fields are dropped and a category that carries no cross-witness type key is dropped with them. The bridge file is a 20 KB element-export fixture, not a full project schedule, so four of the six agreeing surface fields are zero counts — but Revit writes the complete fifteen-storey spatial hierarchy into it even so, which is why `entity_counts.IFCBUILDINGSTOREY` and `storeys.IFCBUILDINGSTOREY` are `known` here and carry the same fifteen (name, elevation) pairs the full export does. `relations.IFCRELFILLSELEMENT` goes the other way: this fixture carries no IfcRelFillsElement at all, so the relation is excluded first-class and is scored only on the sibling full-project artifact. See PROVENANCE.md."
 }

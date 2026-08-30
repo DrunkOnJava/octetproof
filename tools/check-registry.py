@@ -101,6 +101,13 @@ def main() -> int:
     witnesses = {w["id"]: w for w in registry.get("witnesses", [])}
     edges = {e["id"] for e in registry.get("edges", [])}
 
+    for wid, entry in sorted(witnesses.items()):
+        covers = entry.get("covers")
+        if entry.get("kind") == "reader" and entry.get("status") == "adopted" and not covers:
+            errors.append(f"registry: adopted reader {wid} declares no `covers` (spec 1.1.1 section 9.4)")
+        if entry.get("kind") == "author" and covers:
+            errors.append(f"registry: author {wid} must not declare `covers` (coverage is a claim about reading)")
+
     for w in registry.get("witnesses", []):
         if w["node"] not in nodes:
             errors.append(f"witness {w['id']}: node {w['node']!r} is not declared")
@@ -147,6 +154,15 @@ def main() -> int:
                     f"{label}: {wid} manifest says registry_status {declared_status!r}, "
                     f"registry says {entry.get('status')!r}"
                 )
+        for obs_path in sorted((manifest_path.parent / "observations").glob("*.json")):
+            obs = json.loads(obs_path.read_text())
+            wid = obs.get("witness_id") or obs_path.stem
+            entry = witnesses.get(wid)
+            if entry is None:
+                continue
+            extra = sorted(set(obs.get("semantic_surface_covered") or []) - set(entry.get("covers") or []))
+            if extra:
+                errors.append(f"{label}: {wid} observation covers {extra} beyond its registry `covers` declaration")
         authoring = manifest.get("bridge", {}).get("authoring_witness")
         if authoring and authoring not in witnesses:
             errors.append(f"{label}: authoring_witness {authoring!r} is not in the registry")

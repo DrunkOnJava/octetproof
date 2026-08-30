@@ -11,7 +11,7 @@ that for nothing.
 Implemented keywords: `type` (including union types and `null`), `required`,
 `properties`, `additionalProperties` (schema form and `false`), `items`,
 `enum`, `const`, `pattern`, `minLength`, `minItems`, `maxItems`,
-`uniqueItems`, `minimum`. Annotation-only keywords (`$schema`, `$id`, `title`,
+`uniqueItems`, `minimum`, `maxItems`, `allOf`, `if`/`then`/`else`, `not`. Annotation-only keywords (`$schema`, `$id`, `title`,
 `description`) are ignored.
 
 `maxItems` arrived with OctetProof 1.1.0: the observation schema's `relations`
@@ -35,6 +35,7 @@ from pathlib import Path
 ANNOTATION = {"$schema", "$id", "title", "description", "$comment", "examples", "default"}
 IMPLEMENTED = {
     "type", "required", "properties", "additionalProperties", "items",
+    "allOf", "if", "then", "else", "not",
     "enum", "const", "pattern", "minLength", "minItems", "maxItems",
     "uniqueItems", "minimum",
 }
@@ -79,6 +80,22 @@ def check(node, schema, path: str, errors: list[str]) -> None:
         if node is None:
             return
 
+    if "allOf" in schema:
+        for i, sub in enumerate(schema["allOf"]):
+            check(node, sub, f"{path}(allOf[{i}])", errors)
+    if "not" in schema:
+        scratch: list[str] = []
+        check(node, schema["not"], path, scratch)
+        if not scratch:
+            errors.append(f"{path}: matches a schema it must not match (`not`)")
+    if "if" in schema:
+        scratch = []
+        check(node, schema["if"], path, scratch)
+        if not scratch:
+            if "then" in schema:
+                check(node, schema["then"], f"{path}(then)", errors)
+        elif "else" in schema:
+            check(node, schema["else"], f"{path}(else)", errors)
     if "const" in schema and node != schema["const"]:
         errors.append(f"{path}: expected const {schema['const']!r}, got {node!r}")
     if "enum" in schema and node not in schema["enum"]:

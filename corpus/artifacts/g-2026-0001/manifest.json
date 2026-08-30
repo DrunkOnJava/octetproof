@@ -205,7 +205,8 @@
     "entity_counts.IFCROOF",
     "entity_counts.IFCBEAM",
     "entity_counts.IFCFLOWTERMINAL",
-    "entity_counts.IFCUNITASSIGNMENT"
+    "entity_counts.IFCUNITASSIGNMENT",
+    "storeys.IFCBUILDINGSTOREY"
   ],
   "excluded": [
     {
@@ -269,6 +270,13 @@
       "field": "entity_counts.IFCSHADINGDEVICE",
       "reason": "decoder_baseline",
       "tracking_issue": 212,
+      "unsupported_feature": null
+    },
+    {
+      "category": "opening_fills",
+      "field": "relations.IFCRELFILLSELEMENT",
+      "reason": "decoder_baseline",
+      "tracking_issue": 222,
       "unsupported_feature": null
     }
   ],

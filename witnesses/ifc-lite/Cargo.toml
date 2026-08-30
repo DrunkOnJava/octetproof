@@ -3,10 +3,11 @@ name = "witness-ifc-lite"
 version = "0.1.0"
 edition = "2021"
 # Mirrored from tools/ci/witness-ifc-lite/ in DrunkOnJava/rvt-rs at commit
-# dbf23473e1be62cb8ed1a4fb552396c31899df9c (PR #205). Only the
+# a0044f4a11361626c2a4b9fb93c4696ac6b1c6e6 (PR #230). Only the
 # manifest-reading code path in src/main.rs differs, to read the umbrella's
 # §6.1 manifest shape instead of the rvt-rs project-count fixture; the pin,
-# the counting, the canonicalization and the observation shape are unchanged.
+# the counting, the relation and storey readers, the canonicalization and the
+# observation shape are unchanged.
 #
 # NOT the rvt-rs workspace MSRV (1.85). ifc-lite-core 7.1.1 calls
 # `usize::is_multiple_of`, stabilised in Rust 1.87, so this witness needs a

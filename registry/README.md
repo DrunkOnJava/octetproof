@@ -135,7 +135,7 @@ What it resolved to:
 | Status | `adopted`, `checked: 2026-08-30`, `version: 7.1.1` |
 
 `zahmadsaleem/ifc-lite-headless`, the other candidate the search turned up, is
-a different project and is not what is adopted. SPEC.md 1.0.1 §5.3, §18 and
+a different project and is not what is adopted. SPEC.md §5.3, §18 and
 §19 note 4 carry the same resolution.
 
 It is now the third witness in the gate, running against both corpus

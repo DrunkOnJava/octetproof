@@ -33,10 +33,14 @@ Your entry must declare:
 And, in the pull request body:
 
 - **Coverage declaration.** Which fields of the controlled vocabulary you
-  claim. Today that vocabulary is `entity_counts`; `layer_topology`,
+  claim. Today that vocabulary is `entity_counts`, `relations` and `storeys`
+  (the last two added in 1.1.0, SPEC.md §9.4, §20); `layer_topology`,
   `linework`, `bounding_boxes`, `xdata_fields` and `text_content` are
   specified but not yet exercised. Declaring a field you cannot actually
-  parse is a registration violation and grounds for removal.
+  parse is a registration violation and grounds for removal — and the gate
+  enforces the declaration for the set-valued classes: a witness that does
+  not declare `relations` or `storeys` makes the verdict `MANIFEST_ERROR`
+  rather than being quietly skipped.
 - **A version pin.** An exact git SHA or release tag, or the exact PyPI /
   crates.io / NuGet specifier the CI gate will install. Floating ranges are
   forbidden. A witness update is a separate pull request that includes the

@@ -9,7 +9,8 @@ corpus/
   MANIFEST_INDEX.json          hash chain over every manifest
   artifacts/
     g-2026-0001/
-      manifest.json            SPEC.md §6.1 — hashes, origins, counts, surface
+      manifest.json            SPEC.md §6.1 — hashes, origins, counts,
+                               relations, storeys, surface
       PROVENANCE.md            what is recorded and what is not
       observations/            SPEC.md §6.2 — one per witness, committed
       verdict.json             SPEC.md §6.3 — the recorded decision
@@ -68,35 +69,41 @@ driven by the umbrella's different job:
 |---|---|
 | `artifact_id` + `alias` instead of `id` | the umbrella assigns `g-YYYY-NNNN`; `alias` keeps the id the decoder repository uses, so observations from either side resolve. See the artifact's PROVENANCE.md. |
 | `source` / `bridge` blocks carry `origin`, `license` and `bytes` | the corpus fetches by hash instead of committing bytes; without an origin an artifact is not replayable |
-| the `decoder_*` fields are dropped | they are the decoder repository's own regression baseline, which the gate explicitly ignores (§6.1). A category that exists *only* as a decoder baseline goes with them — `levels` in g-2026-0001's upstream, which carries no `source_ifc_type` and so no bridge witness can see it. Where the same category does carry a `source_ifc_type`, as `levels` does in g-2026-0002, it stays: it is a real cross-witness observation (15 exported storeys against 12 recovered) and is excluded first-class rather than dropped. Dropping it would hide a measured disagreement behind a formatting rule |
-| `octetproof_version` names the protocol document each manifest was authored against | g-2026-0001 says `1.0.0`, g-2026-0002 says `1.0.1`. 1.0.1 is a patch release with no schema, diff-function or provenance change (SPEC.md §19a), so the two conform identically; the field records history rather than a difference in obligations, and an immutable manifest is not rewritten to chase a patch number |
+| the `decoder_*` fields are dropped | they are the decoder repository's own regression baseline, which the gate explicitly ignores (§6.1). A category that exists *only* as a decoder baseline goes with them — one that carries no `source_ifc_type` (or, in the 1.1.0 blocks, no `relation_ifc_type` / `storey_ifc_type`) is invisible to every bridge witness and is not a cross-witness category at all. A category that *does* carry its type key stays even when its status excludes it: `relations.IFCRELFILLSELEMENT` on g-2026-0001 is `decoder_baseline` and is kept, because dropping it would hide behind a formatting rule the fact that the two sides of that edge cannot be compared on it |
+| `octetproof_version` names the protocol document each manifest was authored against | both say `1.1.0`, because both now carry the `relations` and `storeys` blocks that 1.1.0 introduced (SPEC.md §20). A manifest using a 1.1.0 block while declaring 1.0.0 would be misdescribing itself. The field records which document the manifest was written against, not a difference in obligations — 1.1.0 is additive and a 1.0.0 document is still conformant input (§16.2) |
 
-Everything the gate reads is unchanged: the normative `counts` block, with
-`source_ifc_type`, `status` (`known` / `known_gap` / `unsupported`),
-`tolerance`, `tracking_issue` and `unsupported_feature` carrying exactly the
-§6.1 meanings.
+Everything the gate reads is unchanged in kind: the normative `counts` block,
+with `source_ifc_type`, `status` (`known` / `known_gap` / `unsupported` /
+`decoder_baseline`), `tolerance`, `tracking_issue` and `unsupported_feature`
+carrying exactly the §6.1 meanings — joined since 1.1.0 by two blocks that
+work the same way. `relations` categories carry `relation_ifc_type` and
+`expected_pairs`; `storeys` categories carry `storey_ifc_type` and
+`expected_storeys`. Neither has a `tolerance`: their field class is exact set
+equality and §7.2 gives it no tolerance concept.
 
 The manifest additionally declares `semantic_surface` and `excluded` — the
-result that `counts` implies. `tools/verdict.py` derives both from `counts`
-and raises `MANIFEST_ERROR` if the declaration disagrees, so flipping a
-category's status without noticing is loud rather than a silent change to
-what is being claimed.
+result those three blocks imply. `tools/verdict.py` derives both and raises
+`MANIFEST_ERROR` if the declaration disagrees, so flipping a category's
+status without noticing is loud rather than a silent change to what is being
+claimed.
 
 ## What is in the corpus today
 
-Two artifacts, one edge, three witnesses.
+Two artifacts, one edge, three witnesses, three agreement classes.
 
 | Artifact | Alias | Bridge file | Verdict |
 |---|---|---|---|
-| `g-2026-0001` | magnetar-2024-core-interior | `2024_Core_Interior.ifc`, 20,392 bytes — an element-export fixture | PASS, 8 surface fields, 4 excluded |
-| `g-2026-0002` | magnetar-2024-core-interior-slim | `2024_Core_Interior_slim.ifc`, 1,665,968 bytes — the full project export | PASS, 4 surface fields, 9 excluded |
+| `g-2026-0001` | magnetar-2024-core-interior | `2024_Core_Interior.ifc`, 20,392 bytes — an element-export fixture | PASS, 6 surface fields, 10 excluded |
+| `g-2026-0002` | magnetar-2024-core-interior-slim | `2024_Core_Interior_slim.ifc`, 1,665,968 bytes — the full project export | PASS, 13 surface fields, 3 excluded |
 
 **They share the same `.rvt` and the same committed rvt-rs observation.** Only
 the Revit-authored bridge file differs, which makes the pair a direct measure
-of how much of the first artifact's agreement was real: the second has a
-narrower surface and five times the exclusions, because the full export shows
-360 walls, 132 doors, 256 columns, 116 spaces and 80 slabs where rvt-rs
-recovers 0, 0, 0, 18 and 64.
+of what a thin reference can support. The full export scores 360 walls, 132
+doors, 256 columns, 80 slabs, 20 shading devices and 15 storeys as exact
+matches, plus 138 `IfcRelFillsElement` host/filling pairs and the 15
+`[name, elevation]` storeys; the 20 KB fixture can score none of the element
+counts and no relation, but carries the same complete fifteen-storey
+hierarchy and so supports `storeys.IFCBUILDINGSTOREY` exactly as strongly.
 
 See the top-level [README](../README.md#what-exists-today) for what that is
 worth, and each artifact's PROVENANCE.md

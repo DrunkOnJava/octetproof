@@ -64,6 +64,13 @@
       "reason": "decoder_baseline",
       "tracking_issue": 212,
       "unsupported_feature": null
+    },
+    {
+      "category": "opening_fills",
+      "field": "relations.IFCRELFILLSELEMENT",
+      "reason": "decoder_baseline",
+      "tracking_issue": 222,
+      "unsupported_feature": null
     }
   ],
   "independence": {
@@ -100,13 +107,15 @@
   "insufficient_witnesses": false,
   "schema_version": "1.0.0",
   "semantic_surface": [
+    "entity_counts.IFCBUILDINGSTOREY",
     "entity_counts.IFCROOF",
     "entity_counts.IFCBEAM",
     "entity_counts.IFCFLOWTERMINAL",
-    "entity_counts.IFCUNITASSIGNMENT"
+    "entity_counts.IFCUNITASSIGNMENT",
+    "storeys.IFCBUILDINGSTOREY"
   ],
   "status": "PASS",
-  "verdict_hash_sha256": "94d723919686963121c05c7475c3ea126e9f8d97fa4b9136c6e5656421c8b40a",
+  "verdict_hash_sha256": "c615cc6c4606c3486be2a82af7566b4e6a5002623ffd39227f591b9df5182efa",
   "witnesses_compared": [
     "ifc-lite",
     "ifcopenshell",

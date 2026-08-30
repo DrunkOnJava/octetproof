@@ -10,9 +10,14 @@ that for nothing.
 
 Implemented keywords: `type` (including union types and `null`), `required`,
 `properties`, `additionalProperties` (schema form and `false`), `items`,
-`enum`, `const`, `pattern`, `minLength`, `minItems`, `uniqueItems`,
-`minimum`. Annotation-only keywords (`$schema`, `$id`, `title`,
+`enum`, `const`, `pattern`, `minLength`, `minItems`, `maxItems`,
+`uniqueItems`, `minimum`. Annotation-only keywords (`$schema`, `$id`, `title`,
 `description`) are ignored.
+
+`maxItems` arrived with OctetProof 1.1.0: the observation schema's `relations`
+and `storeys` payload keys pin each element to a two-item `[a, b]` array with
+`minItems: 2, maxItems: 2`, and without the upper bound a three-element pair
+would validate.
 
 Anything else fails loudly: `check()` reports "schema uses constructs this
 validator does not implement" rather than passing silently. A future schema
@@ -30,7 +35,8 @@ from pathlib import Path
 ANNOTATION = {"$schema", "$id", "title", "description", "$comment", "examples", "default"}
 IMPLEMENTED = {
     "type", "required", "properties", "additionalProperties", "items",
-    "enum", "const", "pattern", "minLength", "minItems", "uniqueItems", "minimum",
+    "enum", "const", "pattern", "minLength", "minItems", "maxItems",
+    "uniqueItems", "minimum",
 }
 SUPPORTED = ANNOTATION | IMPLEMENTED
 
@@ -106,6 +112,8 @@ def check(node, schema, path: str, errors: list[str]) -> None:
     elif isinstance(node, list):
         if "minItems" in schema and len(node) < schema["minItems"]:
             errors.append(f"{path}: {len(node)} items < minItems {schema['minItems']}")
+        if "maxItems" in schema and len(node) > schema["maxItems"]:
+            errors.append(f"{path}: {len(node)} items > maxItems {schema['maxItems']}")
         if schema.get("uniqueItems"):
             seen = [json.dumps(i, sort_keys=True) for i in node]
             if len(set(seen)) != len(seen):

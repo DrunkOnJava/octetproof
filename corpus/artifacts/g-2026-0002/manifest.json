@@ -211,7 +211,9 @@
     "entity_counts.IFCBEAM",
     "entity_counts.IFCFLOWTERMINAL",
     "entity_counts.IFCUNITASSIGNMENT",
-    "entity_counts.IFCSHADINGDEVICE"
+    "entity_counts.IFCSHADINGDEVICE",
+    "relations.IFCRELFILLSELEMENT",
+    "storeys.IFCBUILDINGSTOREY"
   ],
   "excluded": [
     {

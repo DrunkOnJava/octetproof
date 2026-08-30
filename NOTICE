@@ -1,0 +1,75 @@
+OctetProof
+Copyright 2026 Griffin Long
+
+================================================================================
+Licensing split
+================================================================================
+
+This repository is dual-licensed by content type. Which license applies is
+determined by what a file is, not by where it sits.
+
+  Apache License 2.0 — see LICENSE
+    Everything executable or machine-readable:
+      tools/**            the reference implementation of the diff function,
+                          the canonicalizer, the witness runners, the replay
+                          driver and the corpus hash chain
+      .github/workflows/  the CI gate
+      corpus/**           golden artifact manifests, committed observations,
+                          verdicts and the manifest index
+      registry/**         the witness registry and its schema
+      README.md, CONTRIBUTING.md, SECURITY.md and other repository docs
+
+  Creative Commons Attribution 4.0 International — see LICENSE-SPEC
+    SPEC.md               the protocol specification (Layer 1)
+
+SPEC.md carries "License of this document: CC-BY-4.0" in its own header. The
+specification is the citable, scholarly artifact and is meant to be quoted,
+translated, excerpted and re-published with attribution, including by people
+who will never touch this implementation. The tools are meant to be linked,
+forked and vendored into other verification pipelines, for which Apache-2.0
+with its patent grant is the right instrument. Neither license restricts the
+other's material.
+
+If you implement the protocol, you need only SPEC.md and its CC-BY-4.0 terms.
+Any conforming implementation may be used; the reference implementation in
+tools/ is not normative.
+
+================================================================================
+Third-party material
+================================================================================
+
+Witness registry (registry/witnesses.json) and its schema
+  Derived from research/witness-registry.json and
+  docs/schemas/witness-registry.schema.json in DrunkOnJava/rvt-rs
+  (Apache-2.0). Witness ids and field names are kept identical so the two
+  copies stay diffable. See registry/README.md for which copy is canonical.
+
+Specification text (SPEC.md)
+  Copied verbatim from docs/octetproof-spec-draft.md in DrunkOnJava/rvt-rs,
+  including the reviewer notes in its Appendix A, with one added umbrella
+  note. CC-BY-4.0 per the document's own header.
+
+Committed observations and verdict (corpus/artifacts/g-2026-0001/)
+  Copied verbatim from research/witness/magnetar-2024-core-interior/ in
+  DrunkOnJava/rvt-rs (Apache-2.0).
+
+Golden artifacts
+  No source or bridge bytes are redistributed by this repository. The
+  manifests record the SHA-256, byte length, license and public origin of
+  each file. The referenced files
+    Revit/2024_Core_Interior.rvt
+    Revit/2024_Core_Interior.ifc
+  belong to magnetar-io/revit-test-datasets and are MIT-licensed by their
+  authors. Autodesk Revit authored the .rvt and produced the .ifc export;
+  Autodesk retains whatever rights attach to its exporter's output.
+
+IfcOpenShell
+  Not vendored. Installed from PyPI at run time by tools/replay.sh and by the
+  CI gate, and executed as a separate process. IfcOpenShell is LGPL-3.0; it is
+  never linked into anything in this repository.
+
+Trademarks
+  Autodesk, Revit, AutoCAD and DWG are trademarks of Autodesk, Inc. This
+  project is not affiliated with, endorsed by, or sponsored by Autodesk. Uses
+  of those names here are nominative, to identify the formats and the
+  applications that author them.

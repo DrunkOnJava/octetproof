@@ -1,0 +1,12 @@
+# Replay scratch: fetched golden files, venvs, fresh observations and verdicts.
+# Nothing under here is evidence — the committed corpus is.
+_replay/
+_work/
+.venv/
+_pins.txt
+_runners.txt
+
+__pycache__/
+*.py[cod]
+
+.DS_Store

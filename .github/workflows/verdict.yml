@@ -1,0 +1,186 @@
+name: OctetProof verdict
+
+# Layer 4 — the cross-witness CI gate (SPEC.md §5.4, §10).
+#
+# For every golden artifact in the corpus this job:
+#   1. fetches the bridge file from its public origin and verifies its
+#      SHA-256 against the manifest (the corpus never redistributes bytes);
+#   2. runs every bridge witness the manifest marks `ci-runnable` and the
+#      registry marks `adopted`, each in a pinned version;
+#   3. compares the fresh observations against the committed source-witness
+#      observation. The umbrella never builds a decoder: the rvt-rs
+#      observation is committed from the rvt-rs repository, where
+#      `rvt-ifc --observation PATH --artifact-id ID` produces it;
+#   4. emits a verdict, replays each fresh observation's canonical hash
+#      against the committed one, and compares the verdict to the committed
+#      record;
+#   5. uploads observations and verdict for 90 days (§10.6).
+#
+# Fail-closed (§10.5): anything other than PASS with every replay matching
+# fails the build. A missing witness is never treated as agreement.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verdict-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  discover:
+    name: Discover corpus artifacts
+    runs-on: ubuntu-latest
+    outputs:
+      artifacts: ${{ steps.list.outputs.artifacts }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: list
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, pathlib
+          ids = sorted(
+              json.loads((p / "manifest.json").read_text())["artifact_id"]
+              for p in pathlib.Path("corpus/artifacts").iterdir()
+              if (p / "manifest.json").is_file()
+          )
+          assert ids, "corpus/artifacts contains no manifests — fail closed"
+          print("artifacts=" + json.dumps(ids))
+          PY
+
+  chain:
+    name: Hash chain and registry integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      # §12.2: MANIFEST_INDEX.json must be the chain the corpus actually
+      # implies. A manifest edited without regenerating the index fails here.
+      - name: Check MANIFEST_INDEX hash chain
+        run: python3 tools/index.py --check
+      - name: Validate the witness registry against its schema
+        run: python3 tools/check-registry.py
+      # §6.2/§6.3: every committed observation and verdict conforms to the
+      # 1.0.0 schemas, and every committed hash is self-consistent.
+      - name: Validate the committed corpus against the 1.0.0 schemas
+        run: python3 tools/validate-corpus.py
+
+  verdict:
+    name: Verdict — ${{ matrix.artifact }}
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        artifact: ${{ fromJSON(needs.discover.outputs.artifacts) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      # §6.1/§8.4: the golden bridge file is fetched from its recorded public
+      # origin and is only accepted if it hashes to the value the manifest
+      # names. The corpus stores the hash, never the bytes.
+      - name: Fetch the bridge file by hash
+        run: |
+          python3 tools/fetch.py \
+            "corpus/artifacts/${{ matrix.artifact }}/manifest.json" \
+            --which bridge \
+            --out "_work/${{ matrix.artifact }}/bridge.bin"
+
+      # §9.6: the bridge witness is installed at the version the manifest
+      # pins. IfcOpenShell ships prebuilt wheels on PyPI; it runs as a
+      # separate process and is never linked into anything (§9.2, LGPL-3.0).
+      - name: Install adopted, CI-runnable bridge witnesses
+        run: |
+          python3 - <<'PY' > _pins.txt
+          import json
+          m = json.load(open("corpus/artifacts/${{ matrix.artifact }}/manifest.json"))
+          r = {w["id"]: w for w in json.load(open("registry/witnesses.json"))["witnesses"]}
+          for w in m["witnesses"]["bridge"]:
+              if w.get("mode") != "ci-runnable":
+                  continue
+              entry = r.get(w["witness_id"])
+              assert entry is not None, f"{w['witness_id']} is not in the registry"
+              assert entry["status"] == "adopted", f"{w['witness_id']} is {entry['status']}, not adopted"
+              print(w["version_pin"])
+          PY
+          python3 -m pip install --upgrade pip
+          python3 -m pip install --requirement _pins.txt
+
+      # §6.2: each runnable bridge witness emits a canonical observation.
+      - name: Run bridge witnesses
+        run: |
+          mkdir -p "_work/${{ matrix.artifact }}/observations"
+          python3 - <<'PY' > _runners.txt
+          import json
+          m = json.load(open("corpus/artifacts/${{ matrix.artifact }}/manifest.json"))
+          for w in m["witnesses"]["bridge"]:
+              if w.get("mode") == "ci-runnable":
+                  print(w["witness_id"], w["runner"])
+          PY
+          while read -r wid runner; do
+            [ -n "$wid" ] || continue
+            echo "bridge witness: $wid ($runner)"
+            python3 "$runner" \
+              "corpus/artifacts/${{ matrix.artifact }}/manifest.json" \
+              "_work/${{ matrix.artifact }}/bridge.bin" \
+              --observation "_work/${{ matrix.artifact }}/observations/$wid.json"
+          done < _runners.txt
+
+      # Layer 5 boundary: the source witness observation is committed from
+      # the decoder repository. The umbrella never parses a byte, so it never
+      # builds rvt-rs; it replays the committed observation's hash instead.
+      - name: Stage the committed source-witness observation
+        run: |
+          wid=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["witnesses"]["source"]["witness_id"])' \
+            "corpus/artifacts/${{ matrix.artifact }}/manifest.json")
+          cp "corpus/artifacts/${{ matrix.artifact }}/observations/$wid.json" \
+             "_work/${{ matrix.artifact }}/observations/$wid.json"
+
+      # §6.2: the freshly produced observations must conform to the schema,
+      # not merely hash to the committed value.
+      - name: Validate fresh observations against the 1.0.0 schema
+        run: |
+          python3 tools/validate-corpus.py \
+            --extra-observations "_work/${{ matrix.artifact }}/observations"
+
+      # §6.3, §7, §9.3, §10.5 — fail-closed. Only PASS exits 0, and
+      # --compare-committed additionally requires every fresh observation to
+      # replay byte-for-byte against the committed one (§8.4).
+      - name: Verdict
+        run: |
+          python3 tools/verdict.py \
+            "corpus/artifacts/${{ matrix.artifact }}/manifest.json" \
+            "_work/${{ matrix.artifact }}/observations" \
+            --out "_work/${{ matrix.artifact }}/verdict.json" \
+            --registry registry/witnesses.json \
+            --compare-committed "corpus/artifacts/${{ matrix.artifact }}/observations"
+
+      # §13 step 6: the recomputed verdict must match the committed record.
+      - name: Compare against the committed verdict
+        run: |
+          python3 tools/compare-verdict.py \
+            "corpus/artifacts/${{ matrix.artifact }}/verdict.json" \
+            "_work/${{ matrix.artifact }}/verdict.json" \
+            --ignore artifact_id --ignore verdict_hash_sha256
+
+      # §10.6: publish the full observation set and verdict for human review
+      # of any disagreement without re-running the gate.
+      - name: Publish observations and verdict
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: octetproof-${{ matrix.artifact }}
+          path: _work/${{ matrix.artifact }}/
+          retention-days: 90
+          if-no-files-found: error

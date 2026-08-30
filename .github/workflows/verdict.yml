@@ -71,8 +71,8 @@ jobs:
       - name: Validate the witness registry against its schema
         run: python3 tools/check-registry.py
       # §6.2/§6.3: every committed observation and verdict conforms to the
-      # 1.0.0 schemas, and every committed hash is self-consistent.
-      - name: Validate the committed corpus against the 1.0.0 schemas
+      # 1.1.0 schemas, and every committed hash is self-consistent.
+      - name: Validate the committed corpus against the 1.1.0 schemas
         run: python3 tools/validate-corpus.py
 
   verdict:
@@ -204,7 +204,7 @@ jobs:
 
       # §6.2: the freshly produced observations must conform to the schema,
       # not merely hash to the committed value.
-      - name: Validate fresh observations against the 1.0.0 schema
+      - name: Validate fresh observations against the 1.1.0 schema
         run: |
           python3 tools/validate-corpus.py \
             --extra-observations "_work/${{ matrix.artifact }}/observations"

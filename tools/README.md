@@ -24,14 +24,15 @@ so it does not live in this directory:
 | `witnesses/ifc-lite/` | IFClite — the `ifc-lite-core` crate, pinned `=7.1.1` | MPL-2.0 |
 
 `witnesses/ifc-lite/` is **mirrored from `tools/ci/witness-ifc-lite/` in
-DrunkOnJava/rvt-rs at commit `dbf23473e1be62cb8ed1a4fb552396c31899df9c`**
-(PR #205), and the file headers say so. The only change is the
+DrunkOnJava/rvt-rs at commit `a0044f4a11361626c2a4b9fb93c4696ac6b1c6e6`**
+(PR #230), and the file headers say so. The only change is the
 manifest-reading code path, which reads the umbrella's §6.1 manifest shape
 (`bridge.file_hash_sha256` / `bridge.bytes` / `bridge.schema`, and the bridge
 file passed directly) instead of the rvt-rs project-count fixture shape. The
-counting, the canonicalization, the hashing, the manifest-drift check and the
-observation shape are unchanged, which is why the two repositories' committed
-observations hash identically. Keep them in sync.
+counting, the relation and storey readers, the canonicalization, the hashing,
+the manifest-drift check and the observation shape are unchanged, which is
+why the two repositories' committed observations hash identically. Keep them
+in sync.
 
 **This is glue, not a decoder.** It is ~300 lines of argument parsing,
 hashing and JSON. Every byte of IFC is parsed by `ifc-lite-core`, a
@@ -53,7 +54,7 @@ own `WITNESS_VERSION` are one number (§9.6).
 | `verdict.py` | the diff function, the §9.3 independence set, replay, the §10.5 status vocabulary |
 | `compare-verdict.py` | fresh verdict against the committed record (§13 step 6) |
 | `replay.sh` | all of the above end to end, for one artifact |
-| `validate-corpus.py` | observations and verdicts against the 1.0.0 schemas, plus hash self-consistency |
+| `validate-corpus.py` | observations and verdicts against the 1.1.0 schemas, plus hash self-consistency |
 | `check-registry.py` | registry against its schema, cross-references the schema cannot express, and the §9.6 pin chain for every witness this repository builds |
 | `index.py` | rebuild or check `corpus/MANIFEST_INDEX.json` (§12.2) |
 | `jsonschema_mini.py` | the JSON Schema subset the two validators use; not a general engine |
@@ -102,6 +103,30 @@ formatting and Unicode normalization rules are not exercised and are not
 implemented. **A payload with floats or non-ASCII strings would need the full
 RFC 8785 rules before its hash could be trusted across implementations** —
 geometry surfaces will need this, and it is not here yet.
+
+That restriction is why a storey elevation travels as a fixed six-decimal
+*string* in feet rather than as a JSON number (§7.2, §20.2): three witnesses
+on three runtimes must not be asked to print the same `f64` identically. Each
+witness resolves its own file's declared `LENGTHUNIT` and renders the result
+itself, so the unit handling is inside the claimed surface and a unit bug is
+a `DISAGREE`. For the same reason storey names are compared as exact UTF-8
+bytes with **no** Unicode normalization: a normalizer that disagreed between
+the three runtimes would launder a real difference into agreement, so a name
+differing only in composition form is a diff. Fail-closed, and the strict
+direction.
+
+## Field classes the diff function implements
+
+| Class | Payload key | Comparison | Diff shape |
+|---|---|---|---|
+| Entity counts | `entity_counts` | `abs(a - b) <= tolerance` from the manifest category | `value_a` / `value_b` scalars, `tolerance_applied` integer |
+| Relation pair sets (1.1.0) | `relations` | exact equality of the sorted multiset; no tolerance concept | `value_a` / `value_b` set sizes, plus `only_in_a` / `only_in_b`, `tolerance_applied: false` |
+| Storey sets (1.1.0) | `storeys` | exact equality of the sorted multiset; no tolerance concept | same |
+
+A witness compared on a set-valued class must declare it in its
+observation's `semantic_surface_covered`, or the verdict is
+`MANIFEST_ERROR` — a witness that never looked at a field is not a witness
+that agreed about it (§9.4).
 
 Any change to canonicalization changes every committed observation hash and
 is a major version bump of the spec (§16.1).

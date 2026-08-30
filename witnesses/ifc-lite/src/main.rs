@@ -5,30 +5,36 @@
 //!                         --observation observations/ifc-lite.json [--json OUT]
 //!
 //! **Mirrored from `tools/ci/witness-ifc-lite/` in DrunkOnJava/rvt-rs at commit
-//! `dbf23473e1be62cb8ed1a4fb552396c31899df9c` (PR #205).** The only change is
+//! `a0044f4a11361626c2a4b9fb93c4696ac6b1c6e6` (PR #230).** The only change is
 //! the manifest-reading code path: rvt-rs resolves `reference_ifc_file` under a
 //! corpus directory and checks `source.reference_ifc_sha256`, while the
 //! umbrella is handed the bridge file directly and checks
 //! `bridge.file_hash_sha256`, `bridge.bytes` and `bridge.schema` — exactly the
 //! contract `tools/witness-ifcopenshell.py` already implements here. Counting,
-//! canonicalization, hashing, the manifest-drift check and the observation
-//! shape are byte-for-byte the upstream behaviour. Keep the two in sync.
+//! the relation and storey readers, canonicalization, hashing, the
+//! manifest-drift check and the observation shape are byte-for-byte the
+//! upstream behaviour. Keep the two in sync.
 //!
 //! **This is glue, not a decoder.** The umbrella parses no format bytes itself;
 //! `ifc-lite-core` — a separate, MPL-2.0, out-of-tree crate — does, inside this
 //! separate process, and never linked into anything Apache-2.0.
 //!
-//! The manifest (§6.1) is the only source of truth for what is counted: every
-//! `counts` category carrying a `source_ifc_type` is counted, whatever its
-//! status. Excluded (`known_gap` / `unsupported` / `decoder_baseline`) types
-//! are counted and recorded too — the verdict tool is what refuses to diff them
-//! (§7.1 rule 3), not the witness. A witness that silently dropped them would
-//! make the exclusion unauditable.
+//! The manifest (§6.1) is the only source of truth for what is read: every
+//! `counts` category carrying a `source_ifc_type` is counted, every `relations`
+//! category carrying a `relation_ifc_type` contributes its `[host Tag,
+//! filling Tag]` pair set and every `storeys` category carrying a
+//! `storey_ifc_type` contributes its `[Name, Elevation]` set in feet, whatever
+//! the category's status. Excluded (`known_gap` / `unsupported` /
+//! `decoder_baseline`) categories are read and recorded too — the verdict tool
+//! is what refuses to diff them (§7.1 rule 3), not the witness. A witness that
+//! silently dropped them would make the exclusion unauditable.
 //!
 //! Counts use `ifc_lite_core::EntityScanner` (exact STEP keyword, no subtypes —
 //! the same semantics as IfcOpenShell's `by_type(..., include_subtypes=False)`)
-//! and are compared to `expected` within `tolerance`. Exit 1 on any drift or
-//! hash mismatch.
+//! and are compared to `expected` within `tolerance`. Relation pair sets and
+//! storey sets are the 1.1.0 field classes (§7.2, §20.1, §20.2), compared to
+//! `expected_pairs` / `expected_storeys` exactly. Exit 1 on any drift or hash
+//! mismatch.
 //!
 //! This is the third implementation lineage on the RVT → IFC edge: rvt-rs reads
 //! the .rvt (source witness), IfcOpenShell and IFClite each read Revit's .ifc
@@ -40,7 +46,10 @@ use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use ifc_lite_core::EntityScanner;
+use ifc_lite_core::{
+    build_entity_index, decode_ifc_string, extract_length_unit_scale, parse_entity, EntityDecoder,
+    EntityScanner, Token,
+};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
@@ -103,6 +112,171 @@ fn count_by_exact_type(bytes: &[u8]) -> BTreeMap<String, usize> {
         *counts.entry(type_name.trim().to_uppercase()).or_insert(0) += n;
     }
     counts
+}
+
+/// Attribute index of `Tag` on every `IfcElement` subtype in IFC4.
+///
+/// `IfcElement` adds exactly one attribute to `IfcProduct`'s seven, so the
+/// index is the same for `IfcWall`, `IfcDoor`, `IfcWindow` and every other
+/// element type.
+const IFC_ELEMENT_TAG_INDEX: usize = 7;
+
+/// Decode a `Token::String` payload: undouble STEP apostrophes, then run the
+/// crate's `\X…\` decoder.
+fn token_string(raw: &[u8]) -> String {
+    let text = String::from_utf8_lossy(raw).replace("''", "'");
+    decode_ifc_string(&text).into_owned()
+}
+
+/// `IfcRelFillsElement` host/filling `Tag` pairs, canonically sorted.
+///
+/// The chain is Revit's own: `IfcRelVoidsElement` binds an opening to the
+/// element it voids, `IfcRelFillsElement` binds that opening to the element
+/// that fills it, so the pair `[host Tag, filling Tag]` is the door/window to
+/// host-wall relation as an IFC reader sees it (SPEC.md §7.2, field class
+/// *relation pair sets*).
+///
+/// An unset `Tag`, or an opening with no `IfcRelVoidsElement`, contributes an
+/// empty string rather than dropping the pair: a missing half must surface as
+/// a disagreement, never as a silent omission. Duplicates are kept, so the
+/// value is a sorted multiset.
+///
+/// This is the third lineage's own read of the same relation: the scan is
+/// `EntityScanner` + `parse_entity`, sharing no code with IfcOpenShell or
+/// with the rvt-rs source witness's line splitter.
+fn fills_element_pairs(bytes: &[u8]) -> Vec<Vec<String>> {
+    let mut tags: BTreeMap<u32, String> = BTreeMap::new();
+    let mut voided_by: BTreeMap<u32, u32> = BTreeMap::new();
+    let mut fills: Vec<(Option<u32>, Option<u32>)> = Vec::new();
+
+    let mut scanner = EntityScanner::new(bytes);
+    while let Some((id, type_name, start, end)) = scanner.next_entity() {
+        let upper = type_name.trim().to_uppercase();
+        let is_voids = upper == "IFCRELVOIDSELEMENT";
+        let is_fills = upper == "IFCRELFILLSELEMENT";
+        if !is_voids && !is_fills && !upper.starts_with("IFC") {
+            continue;
+        }
+        let Ok((_, _, args)) = parse_entity(&bytes[start..end]) else {
+            continue;
+        };
+        let entity_ref = |index: usize| match args.get(index) {
+            Some(Token::EntityRef(reference)) => Some(*reference),
+            _ => None,
+        };
+        if is_voids {
+            // (GlobalId, OwnerHistory, Name, Description,
+            //  RelatingBuildingElement, RelatedOpeningElement)
+            if let (Some(host), Some(opening)) = (entity_ref(4), entity_ref(5)) {
+                voided_by.insert(opening, host);
+            }
+            continue;
+        }
+        if is_fills {
+            // (GlobalId, OwnerHistory, Name, Description,
+            //  RelatingOpeningElement, RelatedBuildingElement)
+            fills.push((entity_ref(4), entity_ref(5)));
+            continue;
+        }
+        if let Some(Token::String(raw)) = args.get(IFC_ELEMENT_TAG_INDEX) {
+            tags.insert(id, token_string(raw));
+        }
+    }
+
+    let tag_of = |id: Option<u32>| -> String {
+        id.and_then(|id| tags.get(&id).cloned()).unwrap_or_default()
+    };
+    let mut pairs: Vec<Vec<String>> = fills
+        .into_iter()
+        .map(|(opening, filling)| {
+            let host = opening.and_then(|id| voided_by.get(&id).copied());
+            vec![tag_of(host), tag_of(filling)]
+        })
+        .collect();
+    pairs.sort();
+    pairs
+}
+
+/// Attribute index of `Name` on `IfcBuildingStorey` (`IfcRoot` +2).
+const IFC_BUILDING_STOREY_NAME_INDEX: usize = 2;
+
+/// Attribute index of `Elevation` on `IfcBuildingStorey`: the tenth and last
+/// attribute of the IFC4 entity.
+const IFC_BUILDING_STOREY_ELEVATION_INDEX: usize = 9;
+
+/// Metres in one international foot, exactly.
+const METRES_PER_FOOT: f64 = 0.3048;
+
+/// Render an elevation in feet at 1e-6 ft, as a string.
+///
+/// A string, not a JSON number, because the canonical form (SPEC.md §7.3) is
+/// defined over integers and strings only — two runtimes must not be trusted
+/// to print the same `f64` the same way. `-0` normalises to `0`.
+fn format_elevation_feet(feet: f64) -> String {
+    if !feet.is_finite() {
+        return String::new();
+    }
+    let rendered = format!("{feet:.6}");
+    if rendered == "-0.000000" {
+        return "0.000000".to_string();
+    }
+    rendered
+}
+
+/// `IfcBuildingStorey` `[Name, Elevation]` pairs, canonically sorted.
+///
+/// The elevation is converted from the model's declared `LENGTHUNIT` to feet
+/// with `ifc_lite_core::extract_length_unit_scale` — this lineage's own unit
+/// resolver — so the field compares across witnesses whose files declare
+/// different units: Revit's own export of this corpus declares `FOOT` while
+/// rvt-rs writes `METRE` (SPEC.md §7.2, field class *storey sets*).
+///
+/// An unset `Name` or `Elevation` contributes an empty string rather than
+/// dropping the storey: a missing half must surface as a disagreement, never
+/// as a silent omission. An empty list is returned when the model declares no
+/// resolvable length unit — a storey whose unit is unknown is not a
+/// measurement.
+fn building_storey_set(bytes: &[u8]) -> Vec<Vec<String>> {
+    let index = build_entity_index(bytes);
+    let mut decoder = EntityDecoder::with_index(bytes, index);
+    let mut project_id = None;
+    let mut storeys: Vec<(u32, usize, usize)> = Vec::new();
+    let mut scanner = EntityScanner::new(bytes);
+    while let Some((id, type_name, start, end)) = scanner.next_entity() {
+        match type_name.trim().to_uppercase().as_str() {
+            "IFCPROJECT" if project_id.is_none() => project_id = Some(id),
+            "IFCBUILDINGSTOREY" => storeys.push((id, start, end)),
+            _ => {}
+        }
+    }
+    let Some(project_id) = project_id else {
+        return Vec::new();
+    };
+    let Ok(scale) = extract_length_unit_scale(&mut decoder, project_id) else {
+        return Vec::new();
+    };
+    let mut out: Vec<Vec<String>> = Vec::new();
+    for (_, start, end) in storeys {
+        let Ok((_, _, args)) = parse_entity(&bytes[start..end]) else {
+            continue;
+        };
+        let name = match args.get(IFC_BUILDING_STOREY_NAME_INDEX) {
+            Some(Token::String(raw)) => token_string(raw),
+            _ => String::new(),
+        };
+        let elevation = match args.get(IFC_BUILDING_STOREY_ELEVATION_INDEX) {
+            Some(Token::Float(value)) => Some(*value),
+            Some(Token::Integer(value)) => Some(*value as f64),
+            _ => None,
+        };
+        let feet = match elevation {
+            Some(value) => format_elevation_feet(value * scale / METRES_PER_FOOT),
+            None => String::new(),
+        };
+        out.push(vec![name, feet]);
+    }
+    out.sort();
+    out
 }
 
 struct Args {
@@ -266,6 +440,96 @@ fn run() -> Result<i32, String> {
         );
     }
 
+    // `relations` — the 1.1.0 field class (§7.2, §20.1). Read for every
+    // manifest category whatever its status, so an excluded relation stays
+    // auditable; only the verdict decides what is diffed.
+    let empty_relations = Map::new();
+    let relation_categories = manifest
+        .get("relations")
+        .and_then(Value::as_object)
+        .unwrap_or(&empty_relations);
+    let mut relations = Map::new();
+    let mut relation_records = Vec::new();
+    for (category, spec) in relation_categories {
+        let relation_type = spec
+            .get("relation_ifc_type")
+            .and_then(Value::as_str)
+            .ok_or_else(|| format!("{category}: relations entry needs relation_ifc_type"))?;
+        if relation_type != "IFCRELFILLSELEMENT" {
+            return Err(format!(
+                "{category}: no reader for relation type {relation_type}"
+            ));
+        }
+        let pairs = fills_element_pairs(&bytes);
+        let expected = spec
+            .get("expected_pairs")
+            .and_then(Value::as_i64)
+            .unwrap_or(0);
+        let actual = pairs.len() as i64;
+        let ok = actual == expected;
+        if !ok {
+            drift += 1;
+        }
+        println!(
+            "{category:<16} {relation_type:<22} {expected:>8} {actual:>8} {:>4}  {}",
+            0,
+            if ok { "ok" } else { "DRIFT" }
+        );
+        relation_records.push(json!({
+            "category": category,
+            "relation_ifc_type": relation_type,
+            "expected_pairs": expected,
+            "ifc_lite_pairs": actual,
+            "agree": ok,
+        }));
+        relations.insert(relation_type.to_string(), json!(pairs));
+    }
+
+    // `storeys` — the second 1.1.0 field class (§7.2, §20.2). The elevation is
+    // normalised to feet through this file's own declared LENGTHUNIT before it
+    // leaves the witness, which is what makes the field comparable at all.
+    let empty_storeys = Map::new();
+    let storey_categories = manifest
+        .get("storeys")
+        .and_then(Value::as_object)
+        .unwrap_or(&empty_storeys);
+    let mut storeys = Map::new();
+    let mut storey_records = Vec::new();
+    for (category, spec) in storey_categories {
+        let storey_type = spec
+            .get("storey_ifc_type")
+            .and_then(Value::as_str)
+            .ok_or_else(|| format!("{category}: storeys entry needs storey_ifc_type"))?;
+        if storey_type != "IFCBUILDINGSTOREY" {
+            return Err(format!(
+                "{category}: no reader for storey type {storey_type}"
+            ));
+        }
+        let pairs = building_storey_set(&bytes);
+        let expected = spec
+            .get("expected_storeys")
+            .and_then(Value::as_i64)
+            .unwrap_or(0);
+        let actual = pairs.len() as i64;
+        let ok = actual == expected;
+        if !ok {
+            drift += 1;
+        }
+        println!(
+            "{category:<16} {storey_type:<22} {expected:>8} {actual:>8} {:>4}  {}",
+            0,
+            if ok { "ok" } else { "DRIFT" }
+        );
+        storey_records.push(json!({
+            "category": category,
+            "storey_ifc_type": storey_type,
+            "expected_storeys": expected,
+            "ifc_lite_storeys": actual,
+            "agree": ok,
+        }));
+        storeys.insert(storey_type.to_string(), json!(pairs));
+    }
+
     if let Some(path) = args.json.as_ref() {
         let record = json!({
             "schema_version": 1,
@@ -275,6 +539,8 @@ fn run() -> Result<i32, String> {
             "ifc_schema": schema,
             "witness": format!("{WITNESS_ID} {WITNESS_VERSION}"),
             "categories": records,
+            "relations": relation_records,
+            "storeys": storey_records,
             "agree": drift == 0,
         });
         write_json(path, &record)?;
@@ -283,10 +549,12 @@ fn run() -> Result<i32, String> {
     if let Some(path) = args.observation.as_ref() {
         let payload = json!({
             "entity_counts": Value::Object(entity_counts),
+            "relations": Value::Object(relations),
+            "storeys": Value::Object(storeys),
             "ifc_schema": schema,
         });
         let observation = json!({
-            "schema_version": "1.0.0",
+            "schema_version": "1.1.0",
             "witness_id": WITNESS_ID,
             "witness_version": WITNESS_VERSION,
             "artifact_id": manifest.get("artifact_id").cloned().unwrap_or(Value::Null),
@@ -294,7 +562,7 @@ fn run() -> Result<i32, String> {
             "input_file": input_file,
             "input_hash_sha256": actual_sha,
             "deterministic": true,
-            "semantic_surface_covered": ["entity_counts"],
+            "semantic_surface_covered": ["entity_counts", "relations", "storeys"],
             "observation": payload,
             "observation_hash_sha256": canonical_hash(&payload),
             "unsupported_entities": [],
@@ -310,7 +578,9 @@ fn run() -> Result<i32, String> {
         );
         return Ok(1);
     }
-    println!("cross-witness: IFClite agrees with the manifest for every source_ifc_type");
+    println!(
+        "cross-witness: IFClite agrees with the manifest for every source_ifc_type, relation and storey set"
+    );
     Ok(0)
 }
 

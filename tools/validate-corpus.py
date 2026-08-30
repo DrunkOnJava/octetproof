@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Validate every committed observation and verdict in the corpus against the
-OctetProof 1.0.0 schemas (SPEC.md §6.2, §6.3).
+OctetProof 1.1.0 schemas (SPEC.md §6.2, §6.3).
+
+The schemas are additive over 1.0.0 (§16.2): `schema_version` accepts both
+`1.0.0` and `1.1.0`, and the `relations` / `storeys` payload keys are optional,
+so a document written under either version validates here.
 
 Usage: validate-corpus.py [--corpus corpus] [--schemas schemas]
                           [--extra-observations DIR ...]
@@ -125,7 +129,7 @@ def main() -> int:
         print(f"{len(errors)} corpus problem(s)", file=sys.stderr)
         return 1
 
-    print(f"corpus: {checked_obs} observation(s) and {checked_verdicts} verdict(s) conform to the 1.0.0 schemas")
+    print(f"corpus: {checked_obs} observation(s) and {checked_verdicts} verdict(s) conform to the 1.1.0 schemas")
     return 0
 
 

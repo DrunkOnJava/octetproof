@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """OctetProof verdict: compare independent witness observations of one golden
-artifact and emit verdict.json (SPEC.md 1.0.0 §6.3, §7, §9.3, §10.5).
+artifact and emit verdict.json (SPEC.md 1.1.0 §6.3, §7, §9.3, §10.5).
 
 Usage: verdict.py <manifest.json> <observations_dir> --out verdict.json
                   [--registry registry/witnesses.json]
@@ -18,9 +18,22 @@ The manifest's `counts` block is normative (§6.1): a category carrying
 `source_ifc_type` with status `known` puts `entity_counts.<TYPE>` inside the
 surface; status `known_gap` or `unsupported` excludes it first-class (§7.1
 rule 3) and records it in the verdict with its tracking issue, never diffed.
+
+Since 1.1.0 two further manifest blocks are normative in the same way (§20.1,
+§20.2). A `relations` category carrying `relation_ifc_type` contributes
+`relations.<RELATION_TYPE>`, and a `storeys` category carrying
+`storey_ifc_type` contributes `storeys.<STOREY_TYPE>`. Both are set-valued
+field classes with no tolerance concept (§7.2): agreement is exact equality of
+the sorted multiset, and a diff reports each side's set size in `value_a` /
+`value_b` plus the members each side holds alone in `only_in_a` / `only_in_b`,
+with `tolerance_applied: false`. A witness compared on one of them must
+declare it in `semantic_surface_covered`, else MANIFEST_ERROR — a witness that
+never looked is not a witness that agreed.
+
 The manifest's declared `semantic_surface` and `excluded` are cross-checked
-against what `counts` implies; a mismatch is a MANIFEST_ERROR, so an
-accidental status flip cannot silently shrink the surface.
+against what `counts`, `relations` and `storeys` together imply; a mismatch is
+a MANIFEST_ERROR, so an accidental status flip cannot silently shrink the
+surface.
 
 Fail-closed (§5.4, §10.5): fewer than two observations →
 INSUFFICIENT_WITNESSES; any diff inside the surface → DISAGREE; an
@@ -39,8 +52,9 @@ INSUFFICIENT_INDEPENDENT_WITNESSES. Only PASS exits 0.
 observation of the same witness, else REPLAY_DRIFT.
 
 Canonicalisation is §7.3: sorted keys, no insignificant whitespace, UTF-8,
-SHA-256. The payloads in scope carry integers and ASCII strings only, so
-RFC 8785's number rules are moot.
+SHA-256. The payloads in scope carry integers and ASCII strings only — a
+storey elevation travels as a fixed six-decimal string precisely so that it
+stays inside that rule — so RFC 8785's number rules are moot.
 
 Python 3.12 standard library only.
 """
@@ -53,7 +67,21 @@ import json
 import sys
 from pathlib import Path
 
-PREFIX = "entity_counts."
+#: The three normative manifest blocks, in the order the surface is built:
+#: (payload key, manifest block name, the spec key naming the compared type).
+#: `counts` is 1.0.0; `relations` and `storeys` are the additive 1.1.0 field
+#: classes (§20.1, §20.2). The order is load-bearing — `semantic_surface` and
+#: `excluded` are ordered lists compared verbatim against the committed
+#: verdict, so counts come first, then relations, then storeys.
+BLOCKS = (
+    ("entity_counts", "counts", "source_ifc_type"),
+    ("relations", "relations", "relation_ifc_type"),
+    ("storeys", "storeys", "storey_ifc_type"),
+)
+
+#: Payload keys whose field class is a sorted multiset compared for exact
+#: equality, with no tolerance concept (§7.2).
+SET_VALUED = {"relations", "storeys"}
 
 
 def canonical(obj) -> bytes:
@@ -75,30 +103,35 @@ def load_observations(directory: Path) -> dict[str, dict]:
     return out
 
 
-def partition(manifest: dict) -> tuple[list[tuple[str, str, int]], list[dict]]:
-    """Split the normative `counts` block into (surface, excluded).
+def partition(manifest: dict) -> tuple[list[tuple[str, str, str, str, int]], list[dict]]:
+    """Split the normative `counts`, `relations` and `storeys` blocks into
+    (surface, excluded).
 
-    surface entries are (field, category, tolerance); excluded entries are the
-    §6.3 records. Categories without `source_ifc_type` are not part of the
-    cross-witness surface at all (§6.1) and are skipped silently.
+    surface entries are (payload_key, type_name, field, category, tolerance);
+    excluded entries are the §6.3 records. A category that does not carry its
+    block's type key is not part of the cross-witness surface at all (§6.1) and
+    is skipped silently — that is how a decoder-only regression row stays out
+    of the umbrella's view. `tolerance` is meaningless for the set-valued
+    classes and is never read for them (§7.2).
     """
-    surface: list[tuple[str, str, int]] = []
+    surface: list[tuple[str, str, str, str, int]] = []
     excluded: list[dict] = []
-    for category, spec in manifest.get("counts", {}).items():
-        ifc_type = spec.get("source_ifc_type")
-        if not ifc_type:
-            continue
-        field = PREFIX + ifc_type
-        if spec.get("status") == "known":
-            surface.append((field, category, int(spec.get("tolerance", 0))))
-        else:
-            excluded.append({
-                "field": field,
-                "category": category,
-                "reason": spec.get("status"),
-                "tracking_issue": spec.get("tracking_issue"),
-                "unsupported_feature": spec.get("unsupported_feature"),
-            })
+    for payload_key, block_name, type_key in BLOCKS:
+        for category, spec in manifest.get(block_name, {}).items():
+            type_name = spec.get(type_key)
+            if not type_name:
+                continue
+            field = f"{payload_key}.{type_name}"
+            if spec.get("status") == "known":
+                surface.append((payload_key, type_name, field, category, int(spec.get("tolerance", 0))))
+            else:
+                excluded.append({
+                    "field": field,
+                    "category": category,
+                    "reason": spec.get("status"),
+                    "tracking_issue": spec.get("tracking_issue"),
+                    "unsupported_feature": spec.get("unsupported_feature"),
+                })
     return surface, excluded
 
 
@@ -204,37 +237,75 @@ def main() -> int:
     # `counts` block they derive from. Disagreement between the two means the
     # manifest is wrong, and §7.1 rule 3 makes that the manifest's fault.
     declared_surface = manifest.get("semantic_surface")
-    if declared_surface is not None and declared_surface != [f for f, _, _ in surface]:
+    if declared_surface is not None and declared_surface != [f for _, _, f, _, _ in surface]:
         verdict["status"] = "MANIFEST_ERROR"
         verdict.setdefault("manifest_errors", []).append(
-            "declared semantic_surface does not match the `known` categories in counts"
+            "declared semantic_surface does not match the `known` categories in "
+            "counts / relations / storeys"
         )
     declared_excluded = manifest.get("excluded")
     if declared_excluded is not None and declared_excluded != excluded:
         verdict["status"] = "MANIFEST_ERROR"
         verdict.setdefault("manifest_errors", []).append(
-            "declared excluded does not match the non-`known` categories in counts"
+            "declared excluded does not match the non-`known` categories in "
+            "counts / relations / storeys"
         )
 
-    for field, _category, tolerance in surface:
+    for payload_key, type_name, field, _category, tolerance in surface:
         verdict["semantic_surface"].append(field)
+        if payload_key in SET_VALUED:
+            # A witness that never read a field class cannot have agreed on it
+            # (§9.4). The declaration is per run, inside the observation.
+            for wid, obs in observations.items():
+                if payload_key not in (obs.get("semantic_surface_covered") or []):
+                    verdict["status"] = "MANIFEST_ERROR"
+                    verdict.setdefault("manifest_errors", []).append(
+                        f"{wid} does not declare {payload_key}"
+                    )
         if verdict["status"] != "PASS":
             continue
-        ifc_type = field[len(PREFIX):]
-        values = {
-            wid: int(obs.get("observation", {}).get("entity_counts", {}).get(ifc_type, 0))
+
+        if payload_key not in SET_VALUED:
+            values = {
+                wid: int(obs.get("observation", {}).get(payload_key, {}).get(type_name, 0))
+                for wid, obs in observations.items()
+            }
+            wids = sorted(values)
+            for i, a in enumerate(wids):
+                for b in wids[i + 1:]:
+                    if abs(values[a] - values[b]) > tolerance:
+                        verdict["diffs"].append({
+                            "field": field,
+                            "witness_a": a, "value_a": values[a],
+                            "witness_b": b, "value_b": values[b],
+                            "tolerance_applied": tolerance,
+                        })
+            continue
+
+        # Set-valued field classes (§7.2, added in 1.1.0): a relation pair set
+        # or a storey set. Agreement is exact equality of the sorted multiset,
+        # so a diff names the members each side holds alone rather than a
+        # scalar delta, and no tolerance is applied.
+        sets = {
+            wid: [tuple(member) for member in obs.get("observation", {}).get(payload_key, {}).get(type_name, [])]
             for wid, obs in observations.items()
         }
-        wids = sorted(values)
+        wids = sorted(sets)
         for i, a in enumerate(wids):
             for b in wids[i + 1:]:
-                if abs(values[a] - values[b]) > tolerance:
-                    verdict["diffs"].append({
-                        "field": field,
-                        "witness_a": a, "value_a": values[a],
-                        "witness_b": b, "value_b": values[b],
-                        "tolerance_applied": tolerance,
-                    })
+                if sorted(sets[a]) == sorted(sets[b]):
+                    continue
+                only_a = sorted(set(sets[a]) - set(sets[b]))
+                only_b = sorted(set(sets[b]) - set(sets[a]))
+                verdict["diffs"].append({
+                    "field": field,
+                    "witness_a": a, "value_a": len(sets[a]),
+                    "witness_b": b, "value_b": len(sets[b]),
+                    "tolerance_applied": False,
+                    "only_in_a": [list(member) for member in only_a],
+                    "only_in_b": [list(member) for member in only_b],
+                })
+
     if verdict["diffs"] and verdict["status"] == "PASS":
         verdict["status"] = "DISAGREE"
 
@@ -262,6 +333,9 @@ def main() -> int:
           f"excluded: {len(verdict['excluded'])}, diffs: {len(verdict['diffs'])}")
     for d in verdict["diffs"]:
         print(f"  DISAGREE {d['field']}: {d['witness_a']}={d['value_a']} vs {d['witness_b']}={d['value_b']}")
+        if "only_in_a" in d:
+            print(f"    only in {d['witness_a']}: {len(d['only_in_a'])} → {d['only_in_a'][:5]}")
+            print(f"    only in {d['witness_b']}: {len(d['only_in_b'])} → {d['only_in_b'][:5]}")
     for wid, r in verdict.get("replay", {}).items():
         print(f"  replay {wid}: {r}")
     for m in verdict.get("manifest_errors", []):

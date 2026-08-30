@@ -64,61 +64,94 @@ It is still one edge, and this section says so precisely.
 
 | Artifact | Bridge file | Verdict |
 |---|---|---|
-| `g-2026-0001` (alias `magnetar-2024-core-interior`) | `2024_Core_Interior.ifc`, 20,392 bytes, IFC4 — an element-export fixture | **PASS** — 8 surface fields, 0 diffs, 4 excluded |
-| `g-2026-0002` (alias `magnetar-2024-core-interior-slim`) | `2024_Core_Interior_slim.ifc`, 1,665,968 bytes, IFC4, 19,879 entities — the full project export | **PASS** — 4 surface fields, 0 diffs, 9 excluded |
+| `g-2026-0001` (alias `magnetar-2024-core-interior`) | `2024_Core_Interior.ifc`, 20,392 bytes, IFC4 — an element-export fixture | **PASS** — 6 surface fields, 0 diffs, 10 excluded |
+| `g-2026-0002` (alias `magnetar-2024-core-interior-slim`) | `2024_Core_Interior_slim.ifc`, 1,665,968 bytes, IFC4, 19,879 entities — the full project export | **PASS** — 13 surface fields, 0 diffs, 3 excluded |
 
 **The two artifacts share the same `.rvt` and the same committed rvt-rs
 observation.** Only the Revit-authored bridge file differs, which makes the
-pair a direct measurement of how much of the first verdict was real.
+pair a direct measurement of what a thin reference can support and what only
+a real project schedule can.
 
-**g-2026-0001 is thin, and the second artifact is why we know that.** Its
-eight agreeing fields are entity counts for IFCWALL, IFCROOF, IFCDOOR,
-IFCWINDOW, IFCCOLUMN, IFCBEAM, IFCFLOWTERMINAL and IFCUNITASSIGNMENT — and
-seven of the eight are zero on both sides, because the reference IFC is a
-20 KB element-export fixture rather than a project schedule. Three
-independent readers agreeing that a file contains no doors is a real
-agreement and a weak one. It exercises the whole machine — fetch by hash,
-three witnesses, canonical observations, an independence check, a replay, a
-fail-closed gate — on a bridge file that carries almost nothing.
+### Three agreement classes, not one
 
-Four fields are excluded there first-class, because rvt-rs cannot yet recover
-them and says so rather than pretending:
+The corpus claims three kinds of field today, and they are not equally
+strong. Ranked by what agreement on them actually proves:
 
-| Excluded field | Category | Reason | Tracking |
+| Class | Spec | Proves | Recorded |
 |---|---|---|---|
-| entity_counts.IFCSHADINGDEVICE | floors | known_gap: floor slab extrusion thickness | rvt-rs#31 |
-| entity_counts.IFCSPACE | rooms / spaces | known_gap: typed door/window discrimination and host binding | rvt-rs#33 |
-| entity_counts.IFCMATERIAL | materials | known_gap: Revit compound assemblies and WallType widths | rvt-rs#34 |
-| entity_counts.IFCPROPERTYSET | property sets | known_gap: typed door/window discrimination and host binding | rvt-rs#35 |
+| Entity counts | §7.2 | cardinality — the readers count the same instances of the same types | both artifacts |
+| Relation pair sets | §7.2, §20.1 | topology — the readers agree about *which* entity is bound to *which* | g-2026-0002 |
+| Storey sets | §7.2, §20.2 | labels and units — the decoder read the name Revit wrote and put it at the height Revit wrote | both artifacts |
 
-An excluded field never appears in a disagreement. If it does, the manifest
-is wrong, not the witness (SPEC.md §7.1).
+A count is the weakest of the three. Two witnesses can report the same 138
+`IfcRelFillsElement` instances while disagreeing about every wall those
+openings belong to; agreeing on the pair set means they agree about the
+model's topology. The storey set goes further still: it is the first field in
+this corpus where the two sides of the edge express the *same physical
+quantity in different units* — Revit's export declares `FOOT`, rvt-rs writes
+`METRE` — so each witness must resolve its own file's declared `LENGTHUNIT`
+before emitting, and a unit bug is a `DISAGREE` rather than a silently
+3.28×-wrong building.
 
 ### g-2026-0002: the same model against a real project schedule
 
-The full export is where the decoder is actually measured, and the numbers
-are not flattering. Both bridge readers count, independently and identically:
+The full export is where the decoder is measured, across all three classes.
+All three witnesses agree exactly, at tolerance 0:
 
-| Category | The Revit export has | rvt-rs recovers | Status |
-|---|---|---|---|
-| walls (IFCWALL) | **360** | 0 | known_gap, rvt-rs#30 |
-| doors (IFCDOOR) | **132** | 0 | known_gap, rvt-rs#32 |
-| columns (IFCCOLUMN) | **256** | 0 | known_gap, rvt-rs#204 |
-| rooms / spaces (IFCSPACE) | **116** | 18 | known_gap, rvt-rs#33 |
-| floors (IFCSLAB) | **80** | 64 | known_gap, rvt-rs#31 |
-| levels (IFCBUILDINGSTOREY) | **15** | 12 | decoder_baseline, rvt-rs#33 |
-| windows (IFCWINDOW) | 6 | 0 | known_gap, rvt-rs#32 |
-| materials (IFCMATERIAL) | 10 | 102 | known_gap, rvt-rs#34 — an over-count |
-| property sets (IFCPROPERTYSET) | 0 | 64 | known_gap, rvt-rs#35 — an over-count against zero |
+| Field | Class | Agreed value |
+|---|---|---|
+| entity_counts.IFCWALL | count | **360** |
+| entity_counts.IFCCOLUMN | count | **256** |
+| entity_counts.IFCDOOR | count | **132** |
+| entity_counts.IFCSLAB | count | **80** |
+| entity_counts.IFCSHADINGDEVICE | count | **20** |
+| entity_counts.IFCBUILDINGSTOREY | count | **15** |
+| entity_counts.IFCWINDOW | count | 6 |
+| entity_counts.IFCUNITASSIGNMENT | count | 1 |
+| entity_counts.IFCROOF / IFCBEAM / IFCFLOWTERMINAL | count | 0 |
+| relations.IFCRELFILLSELEMENT | relation pair set | **138 `[host Tag, filling Tag]` pairs** — every door and window in its own host wall |
+| storeys.IFCBUILDINGSTOREY | storey set | **15 `[name, elevation]` pairs** — `Basement 2` at −40 ft through `Level 13` at 185.5 ft |
 
-So the claimed surface on that artifact is **four fields** — IFCROOF,
-IFCBEAM, IFCFLOWTERMINAL and IFCUNITASSIGNMENT — of which only
-IFCUNITASSIGNMENT is non-zero. A wider claim would be a false one while 360
-walls, 132 doors and 256 columns go unrecovered. **The nine-row table above
-is the deliverable, not a footnote to it:** it is a measured gap between an
-independent decoder and Revit's own exporter on a real project, each row
-carrying its tracking issue, and the gate refuses to diff any of them so that
-none can be quietly reclassified as agreement.
+Three fields are excluded first-class, because rvt-rs and the export disagree
+in ways that are tracked decoder gaps rather than verification failures:
+
+| Excluded field | Category | Export | rvt-rs | Tracking |
+|---|---|---|---|---|
+| entity_counts.IFCSPACE | rooms / spaces | 116 | 18 | rvt-rs#33 |
+| entity_counts.IFCMATERIAL | materials | 10 | 102 | rvt-rs#34 — an over-count |
+| entity_counts.IFCPROPERTYSET | property sets | 0 | 854 | rvt-rs#35 — an over-count against zero |
+
+**That table used to have nine rows.** Walls, doors, windows, columns, slabs
+and shading devices were all measured gaps here; rvt-rs closed each of them
+as an exact id-set match, and `levels` with it. The three that remain are the
+real open gap, and the gate refuses to diff them so none can be quietly
+reclassified as agreement. An excluded field never appears in a disagreement;
+if it does, the manifest is wrong, not the witness (SPEC.md §7.1).
+
+### g-2026-0001 is thin, and one field on it is not
+
+Its six agreeing fields are entity counts for IFCBUILDINGSTOREY, IFCROOF,
+IFCBEAM, IFCFLOWTERMINAL and IFCUNITASSIGNMENT, plus
+`storeys.IFCBUILDINGSTOREY`. Three of the five counts are zero on both sides,
+because the reference IFC is a 20 KB element-export fixture whose single
+building element is one `IFCSHADINGDEVICE`. Three independent readers
+agreeing that a file contains no doors is a real agreement and a weak one.
+
+The storey set is the exception, and it is the useful case for the protocol:
+**Revit writes the complete fifteen-storey spatial hierarchy into even a
+one-element export**, so the thin fixture supports that field exactly as
+strongly as the 19,879-entity project export does — the same fifteen pairs,
+the same unit normalisation, agreed by all three witnesses. A thin artifact
+supports a thin surface, except where it does not, and the manifest is what
+says which.
+
+The other ten categories are excluded first-class. Nine are counts the
+fixture cannot score (rvt-rs recovers 360 walls, 132 doors, 6 windows, 256
+columns, 80 slabs and 20 shading devices from this same `.rvt`, all of them
+scored on the sibling artifact); the tenth is
+`relations.IFCRELFILLSELEMENT`, excluded because the fixture carries no
+`IfcRelFillsElement` at all. Two files that cannot be compared on a field
+must say so rather than record a zero-against-zero agreement.
 
 ### The third witness
 
@@ -129,11 +162,15 @@ geometry kernel against* IfcOpenShell, which is a comparison, not a shared
 lineage.
 
 On both artifacts its canonical observation payload hashes **identically** to
-IfcOpenShell's (`8cf40465…` on g-2026-0001, `882e1e0f…` on g-2026-0002). Two
+IfcOpenShell's (`99e6cd7a…` on g-2026-0001, `5a101408…` on g-2026-0002). Two
 unrelated STEP readers, in different languages, produced byte-identical
-canonical payloads for every entity type on both files. That is corroboration
-of the bridge-side reading and nothing more — it says the two readers agree
-about what is in the file, not that `entity_counts` is a deep surface.
+canonical payloads for every entity type, every relation pair and every
+storey pair on both files — including the unit normalisation, which each
+resolved with its own code
+(`ifcopenshell.util.unit.calculate_unit_scale` against
+`ifc_lite_core::extract_length_unit_scale`). That is corroboration of the
+bridge-side reading and nothing more: it says the two readers agree about
+what is in the file, not that the source side is proved by it.
 
 It runs in CI through `witnesses/ifc-lite/`, glue mirrored from rvt-rs, built
 out of workspace so MPL-2.0 code is never linked into this Apache-2.0 tree.
@@ -154,13 +191,16 @@ does.
   the LAYER/LTYPE/BLOCK tables — with 3D ACIS solids deferred.
 - **dwg-rs witness mode.** dwg-rs has no `--observation` flag yet, so it
   cannot emit an OctetProof observation. rvt-rs already can.
-- **A surface deeper than entity counts.** Three witnesses now agree on
-  `entity_counts`, which is a real but shallow claim: it says the readers
-  count the same instances of the same types, not that they agree about
-  geometry, placement, or property values. §11's faithful-export surface is
-  much wider than what any manifest here claims, and the canonicalizer needs
-  the full RFC 8785 number rules before a float-bearing surface can be
-  trusted at all.
+- **A surface deeper than counts, one relation and one storey set.** Three
+  witnesses now agree on `entity_counts`, on `relations.IFCRELFILLSELEMENT`
+  and on `storeys.IFCBUILDINGSTOREY`. That is topology and labels as well as
+  cardinality, but it is still not geometry: no field here compares a
+  placement, a swept profile, a vertex or a property value. §11's
+  faithful-export surface is much wider than what any manifest claims, and
+  the canonicalizer needs the full RFC 8785 number rules before a
+  float-bearing surface can be trusted at all. The storey set sidesteps that
+  by carrying its elevation as a fixed six-decimal string; a real geometry
+  surface will not be able to.
 - **Anything that is not this one model.** Both artifacts are exports of the
   same `2024_Core_Interior.rvt`. A second source model would test the decoder
   rather than one file's worth of it.
@@ -182,7 +222,7 @@ does.
 ## Repository layout
 
 ```
-SPEC.md                         Layer 1 — the protocol, version 1.0.1 (CC-BY-4.0)
+SPEC.md                         Layer 1 — the protocol, version 1.1.0 (CC-BY-4.0)
 schemas/                          machine-checkable observation + verdict schemas
 corpus/                         Layer 2 — golden artifacts
   MANIFEST_INDEX.json             hash chain over every manifest
@@ -255,11 +295,11 @@ That fetches the bridge file from its public origin and rejects it unless it
 hashes to the recorded value, installs the pinned IfcOpenShell into a venv,
 builds the pinned IFClite glue with `cargo build --release --locked`, runs
 both bridge witnesses, copies in the committed rvt-rs observation, validates
-everything against the 1.0.0 schemas, and prints:
+everything against the 1.1.0 schemas, and prints:
 
 ```
 g-2026-0002: PASS — witnesses ifc-lite, ifcopenshell, rvt-rs
-  surface: 4 fields, excluded: 9, diffs: 0
+  surface: 13 fields, excluded: 3, diffs: 0
   replay ifc-lite: match
   replay ifcopenshell: match
   replay rvt-rs: match
@@ -268,7 +308,7 @@ verdict matches the committed record (ignored: artifact_id, replay, timestamp, v
 
 It exits 0 only on PASS with every observation replaying byte-for-byte and
 the fresh verdict matching the committed one. Omit the argument for
-`g-2026-0001`, which prints `surface: 8 fields, excluded: 4, diffs: 0` with
+`g-2026-0001`, which prints `surface: 6 fields, excluded: 10, diffs: 0` with
 the same three witnesses.
 
 The steps are individually runnable if you would rather see them:
@@ -308,7 +348,8 @@ declaring:
   lineage, not by repository. uncad over LibreDWG, FreeCAD BIM over
   IfcOpenShell, GDAL's DGN driver over dgnlib: each pair is one witness.
 - **Coverage.** Which fields of the controlled vocabulary you claim
-  (`entity_counts` today). Declaring a field you cannot parse is a
+  (`entity_counts`, `relations` and `storeys` today). Declaring a field you
+  cannot parse is a
   registration violation.
 - **An exact version pin.** A git SHA or a release tag. Floating ranges are
   forbidden; silent upgrades are a protocol violation.
@@ -324,19 +365,28 @@ Full process, including the clean-room rule and the no-GPL-linking rule:
 
 ## Status and licensing
 
-Protocol version **1.0.1**, dated 2026-08-30. `SPEC.md` is the released
+Protocol version **1.1.0**, dated 2026-08-30. `SPEC.md` is the released
 specification, not a draft: it supersedes the draft received from the project
-owner on 2026-08-30, and its Section 19 lists every correction applied. The
-draft, with its reviewer notes, is retained in rvt-rs at
+owner on 2026-08-30, and its Section 19 lists every correction applied to
+reach 1.0.0. The draft, with its reviewer notes, is retained in rvt-rs at
 `docs/octetproof-spec-draft.md`.
 
-1.0.1 is a patch release (§19a): it resolves note 4's open `ifc-lite` license
-question to MPL-2.0 against the exact upstream, and replaces the "umbrella
-repository planned" wording now that this repository exists. **No schema,
-diff-function or provenance rule changed**, so every document here still
-declares `schema_version: "1.0.0"` and a 1.0.0 implementation remains
-conformant. `SPEC.md` is a byte-identical copy of
-`docs/octetproof-spec.md` in rvt-rs, the same policy as the registry.
+**1.1.0 is a minor, additive release (§16.1, §20).** It adds two field
+classes and nothing else: relation pair sets (§20.1) and storey sets (§20.2),
+each with one surface-vocabulary term and one manifest block parallel to
+`counts`. The diff function, the canonicalizer, the provenance model and the
+verdict statuses are unchanged, and a 1.0.0 observation remains valid input
+to a 1.1.0 gate — the published schema's `schema_version` accepts both
+`1.0.0` and `1.1.0` so previously committed corpora stay valid (§16.2). Every
+observation and verdict in this corpus is regenerated under 1.1.0 and both
+manifests declare `octetproof_version: "1.1.0"`, because both now carry the
+new blocks. `SPEC.md` is a byte-identical copy of `docs/octetproof-spec.md`
+in rvt-rs, the same policy as the registry.
+
+The earlier 1.0.1 patch release (§19a) resolved note 4's open `ifc-lite`
+license question to MPL-2.0 against the exact upstream and replaced the
+"umbrella repository planned" wording; it changed no schema, diff function or
+provenance rule.
 
 Two of the spec's schemas are machine-checkable and shipped here:
 `schemas/witness-observation.schema.json` (§6.2) and

@@ -5,10 +5,10 @@
       "artifact_id": "g-2026-0001",
       "bridge_sha256": "d07c7462aee22640661faed5262cf802ce0fcbc663f312961a39be92bf857050",
       "manifest_path": "corpus/artifacts/g-2026-0001/manifest.json",
-      "manifest_sha256": "898ee2fe249574b4279da37fcaa6edb6cc680eb57e43b18686706462cd22147f",
+      "manifest_sha256": "6620d925a7a89688b991d4b1a8e10ead6191e73b4242502b8b014cdfbc0c3971",
       "prev_hash": null,
       "source_sha256": "c805df445d613b408e37337765572021265e3f5dfdc7d1fa53b22ba1600b8014",
-      "verdict_hash_sha256": "ae4679f6044a4c3caa0b2f3a6030648bc633b1d878957a759120f011f71ded5e",
+      "verdict_hash_sha256": "94d723919686963121c05c7475c3ea126e9f8d97fa4b9136c6e5656421c8b40a",
       "verdict_status": "PASS"
     },
     {
@@ -16,15 +16,15 @@
       "artifact_id": "g-2026-0002",
       "bridge_sha256": "bfdf36ffb0bb768f3409d818403990e64d4c262c6780603be87f8077387ad86d",
       "manifest_path": "corpus/artifacts/g-2026-0002/manifest.json",
-      "manifest_sha256": "42bbeeaa0f0f7cf0fb9e6b8289b6910eedf9d49d4cbc38d7c894b3693c4dc1e7",
-      "prev_hash": "052f805331139ce12af539bc2537b44ff9428e436205ec5f93d131fd1f7d4c94",
+      "manifest_sha256": "f22783cd973aa9fb4968d72c4b0b47849f4da97574e0c71dcca36de37c39893a",
+      "prev_hash": "6e2a42634621ed26b655dbf1c3bc7cd1488650779e65cf02223a33c66450279f",
       "source_sha256": "c805df445d613b408e37337765572021265e3f5dfdc7d1fa53b22ba1600b8014",
-      "verdict_hash_sha256": "afa87bb0a4e35ea8e5fa9a1adb21b29f8a0ba532571c88fd00c14dabcd4c7145",
+      "verdict_hash_sha256": "48ef575a11505ee1fcbb02b37b3551e0e8d5618a1ec39aeb6d6cb250e085648c",
       "verdict_status": "PASS"
     }
   ],
   "chain_algorithm": "sha256 over JCS-lite canonical entries (sorted keys, no whitespace, UTF-8)",
-  "chain_head": "42f52b37d53389f1a1e08a26e84cea209e64c9cd3544d94a6e83851dba0add53",
+  "chain_head": "50fb3adb759b3d2ddb45a9b4e7d33a4c486cba749901777e7f58df1ec3aa7a58",
   "schema_version": "1.0.0",
   "signature": null,
   "signing_status": "not implemented — SPEC.md §12.2 requires an Ed25519 signature over the chain head; no maintainer key is published yet, so this chain is tamper-evident but not cryptographically anchored"

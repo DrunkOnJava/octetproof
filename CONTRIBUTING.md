@@ -77,9 +77,23 @@ Ara3D's mesh side over web-ifc.
 **No GPL linking, ever.** Copyleft witnesses are invoked as isolated
 subprocesses that read a file and write JSON. Nothing in `tools/` links,
 imports, statically embeds, or vendors copyleft code, and nothing may start.
-IfcOpenShell — the one witness the gate runs today — is LGPL-3.0 and is
-installed from PyPI at run time and executed as a separate Python process,
-which is stricter than LGPL requires.
+The gate runs two witnesses today, both at arm's length:
+
+- **IfcOpenShell** (LGPL-3.0) is installed from PyPI at run time and executed
+  as a separate Python process, which is stricter than LGPL requires.
+- **IFClite** (`ifc-lite-core`, MPL-2.0) is fetched from crates.io at the
+  exact pinned version and compiled into `witnesses/ifc-lite`, which is
+  **its own Cargo workspace root** and is built by nothing else here. MPL-2.0
+  is a file-level copyleft and does link, so the isolation is structural: no
+  Apache-2.0 artifact in this repository contains it, and no file of it is
+  modified or redistributed.
+
+A witness whose driver cannot be written in the standard library goes in
+`witnesses/<id>/`, not in `tools/`, and its manifest entry declares
+`runner_kind`. `tools/check-registry.py` will refuse the build unless the
+registry version, the package-manager pin, the manifest `version_pin` and the
+version constant the binary stamps into its observations are one number
+(§9.6).
 
 **Clean-room rule.** Contributions to a *decoder* that participates as a
 witness must be clean-room with respect to the format it decodes: derived
@@ -139,7 +153,9 @@ it.
   a stranger can run it, and every added dependency is a reason it will not
   run in five years. `tools/check-registry.py` implements the JSON Schema
   subset the registry uses rather than depending on `jsonschema`, for exactly
-  this reason.
+  this reason. The constraint binds `tools/`; a witness driver under
+  `witnesses/` is whatever language its reader needs, with its dependency
+  tree pinned by a committed lock file and built with `--locked`.
 - **Canonicalization is load-bearing.** Sorted keys, no insignificant
   whitespace, UTF-8, SHA-256. Any change to how a payload is canonicalized
   changes every committed observation hash and is a major version bump of the
@@ -149,7 +165,11 @@ it.
   path where absence of evidence becomes evidence of agreement.
 - **The umbrella never parses a byte.** No decoder source, no format parsing,
   no vendored binaries. If a change would make this repository read a `.rvt`
-  or a `.dwg` directly, it belongs in a decoder repository instead.
+  or a `.dwg` directly, it belongs in a decoder repository instead. The
+  drivers in `witnesses/` are the one adjacent thing that is allowed, and
+  only on that condition: they may hash an input, count what a manifest
+  names via a third-party reader, and emit an observation. The moment one of
+  them contains format-parsing logic of its own it has stopped being glue.
 
 Pull requests are squash-merged. Use conventional commit subjects.
 

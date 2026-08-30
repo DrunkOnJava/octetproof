@@ -85,14 +85,22 @@ fields:
 `tools/check-registry.py` validates the file against the schema and checks
 the cross-references the schema cannot express: every node, witness, edge and
 agreement referenced anywhere must be declared, and every witness a corpus
-manifest names must exist here with the right status. CI runs it on every
-push.
+manifest names must exist here with the right status. It also enforces §9.6
+version pinning for any witness the umbrella builds itself — a bridge witness
+declaring `runner_kind: "cargo"` must have its registry `version`, its
+runner's exact `crate = "=X.Y.Z"` Cargo pin, a committed `Cargo.lock`, the
+manifest's `version_pin` string and the `WITNESS_ID`/`WITNESS_VERSION`
+constants in the runner's `src/main.rs` all agree. That mirrors rvt-rs's
+`tests/witness_registry.rs::ifc_lite_gate_is_wired_and_version_pinned`, which
+cannot be imported here because the umbrella has no Rust test harness. CI
+runs the whole check on every push.
 
 ## Honesty rules baked into the data
 
 - **Listing is not endorsement.** Most entries are `candidate`, meaning
-  "known to exist, not yet used in an agreement". Only four witnesses are
-  `adopted`.
+  "known to exist, not yet used in an agreement". Of 47 entries, five are
+  `adopted`: rvt-rs, dwg-rs, autodesk-revit-exporter, ifcopenshell and
+  ifc-lite.
 - **Claims stay the project's own.** A coverage or pass-rate figure in a
   candidate's `notes` — jDwgParser's "100% entity types, 92% sample pass
   rate", for instance — is that project's claim, not a measurement made here.
@@ -105,13 +113,38 @@ push.
 
 ## Known unresolved entries
 
-- **`ifc-lite`** — carried here as `MIT` with a bare `ifc-lite` in `repo`
-  rather than an `owner/name`, so the upstream is not pinned down. The
-  specification draft listed it as MPL-2.0; the registry has it as MIT from an
-  earlier survey. Neither has been verified, which is why the entry has no
-  `checked` date. It is copied as-is deliberately; resolving the upstream and
-  the license is in progress in the third-IFC-witness lane, and until it is
-  resolved `ifc-lite` stays a `candidate` and cannot enter a gate.
+None outstanding. The one entry that was listed here — `ifc-lite` — is
+resolved.
+
+**`ifc-lite`, resolved 2026-08-30.** It was carried as `license: MIT` against
+a bare `ifc-lite` in `repo` rather than an `owner/name`, with no `checked`
+date, because neither the license nor the upstream had been verified: the
+specification draft said MPL-2.0, the registry said MIT, and a GitHub search
+returned candidates that disagreed. SPEC.md §19 note 4 recorded the entry as
+gate-ineligible until that was settled.
+
+What it resolved to:
+
+| | |
+|---|---|
+| Upstream | `LTplus-AG/ifc-lite` — the `repository` field of the crate itself |
+| Crate | `ifc-lite-core` **7.1.1**, published 2026-08-27 (crates.io API). A bare `ifc-lite` crate does not exist, which is why the old entry could not be verified |
+| License | **MPL-2.0**, read on 2026-08-30 from both the crate metadata and the GitHub API's license object for that repository — so the old `MIT` was wrong, and so was the bare slug |
+| Language | Rust, own byte-level STEP scanner plus a nom tokenizer; it links no IfcOpenShell code |
+| Lineage | its own. The project *verifies its geometry kernel against* IfcOpenShell, which is a comparison, not a shared lineage — the same distinction that makes FreeCAD BIM and IfcOpenShell one witness and these two |
+| Status | `adopted`, `checked: 2026-08-30`, `version: 7.1.1` |
+
+`zahmadsaleem/ifc-lite-headless`, the other candidate the search turned up, is
+a different project and is not what is adopted. SPEC.md 1.0.1 §5.3, §18 and
+§19 note 4 carry the same resolution.
+
+It is now the third witness in the gate, running against both corpus
+artifacts through the vendored glue at `witnesses/ifc-lite/` (Apache-2.0,
+mirrored from rvt-rs). The §9.6 pin is held to one number —
+`ifc-lite-core = "=7.1.1"` in that crate's `Cargo.toml`, the `version` field
+here, each manifest's `version_pin`, and the `WITNESS_VERSION` the binary
+stamps into every observation — by `tools/check-registry.py`, which fails if
+any of the four drifts.
 
 ## Registering
 

@@ -5,15 +5,26 @@
       "artifact_id": "g-2026-0001",
       "bridge_sha256": "d07c7462aee22640661faed5262cf802ce0fcbc663f312961a39be92bf857050",
       "manifest_path": "corpus/artifacts/g-2026-0001/manifest.json",
-      "manifest_sha256": "18a24f193f07164a5f2354c2b3cdd66462c22f2967cf1cac4652427bf0a7c97c",
+      "manifest_sha256": "a96e72b47c355078c011b6fe5ca0d613d34f9619eae07b6e66f91f2e8608a7ef",
       "prev_hash": null,
       "source_sha256": "c805df445d613b408e37337765572021265e3f5dfdc7d1fa53b22ba1600b8014",
-      "verdict_hash_sha256": "3df3ba73bb3f86fd3fab63c4a4db5fb7074fa18036056f01bba45d0c0b43f53a",
+      "verdict_hash_sha256": "e8bdb0a0748cd0904ae2da29594c902202fcf1a5e2ad1b5150c1d73ff6215bae",
+      "verdict_status": "PASS"
+    },
+    {
+      "alias": "magnetar-2024-core-interior-slim",
+      "artifact_id": "g-2026-0002",
+      "bridge_sha256": "bfdf36ffb0bb768f3409d818403990e64d4c262c6780603be87f8077387ad86d",
+      "manifest_path": "corpus/artifacts/g-2026-0002/manifest.json",
+      "manifest_sha256": "d5b119aa7f957a3f3263f49160ec26f1ad1b70ebd53bea01a7f83c76405e7f94",
+      "prev_hash": "f27d32e35776e172364ca913affd5344b7b9f4b8c8ea3ba9ba712bd4db362050",
+      "source_sha256": "c805df445d613b408e37337765572021265e3f5dfdc7d1fa53b22ba1600b8014",
+      "verdict_hash_sha256": "3f1e425bdee9710a7288fe60425e297ecdee4d968d1c773c88cd9973a776d1c4",
       "verdict_status": "PASS"
     }
   ],
   "chain_algorithm": "sha256 over JCS-lite canonical entries (sorted keys, no whitespace, UTF-8)",
-  "chain_head": "f56310c08c810762a6ee8fb63a93824bb0ae3cc6d388d1d4642961de348f3844",
+  "chain_head": "7a8a62ca4449a3e22c31dfbb6eff44fe73a0fde3f776d9f1ab7c279e99279842",
   "schema_version": "1.0.0",
   "signature": null,
   "signing_status": "not implemented — SPEC.md §12.2 requires an Ed25519 signature over the chain head; no maintainer key is published yet, so this chain is tamper-evident but not cryptographically anchored"

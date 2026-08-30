@@ -44,7 +44,16 @@
         "witness_id": "ifcopenshell",
         "mode": "ci-runnable",
         "runner": "tools/witness-ifcopenshell.py",
+        "runner_kind": "python",
         "version_pin": "ifcopenshell>=0.8,<0.9",
+        "registry_status": "adopted"
+      },
+      {
+        "witness_id": "ifc-lite",
+        "mode": "ci-runnable",
+        "runner": "witnesses/ifc-lite",
+        "runner_kind": "cargo",
+        "version_pin": "ifc-lite-core = \"=7.1.1\"",
         "registry_status": "adopted"
       }
     ]

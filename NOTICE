@@ -13,6 +13,10 @@ determined by what a file is, not by where it sits.
       tools/**            the reference implementation of the diff function,
                           the canonicalizer, the witness runners, the replay
                           driver and the corpus hash chain
+      witnesses/**        witness glue: small drivers that hash an input,
+                          count what a manifest names, and emit an
+                          observation. The readers they drive are third-party
+                          and are not vendored here
       .github/workflows/  the CI gate
       corpus/**           golden artifact manifests, committed observations,
                           verdicts and the manifest index
@@ -45,13 +49,22 @@ Witness registry (registry/witnesses.json) and its schema
   copies stay diffable. See registry/README.md for which copy is canonical.
 
 Specification text (SPEC.md)
-  Copied verbatim from docs/octetproof-spec-draft.md in DrunkOnJava/rvt-rs,
-  including the reviewer notes in its Appendix A, with one added umbrella
-  note. CC-BY-4.0 per the document's own header.
+  A byte-identical copy of docs/octetproof-spec.md in DrunkOnJava/rvt-rs,
+  version 1.0.1, including the reviewer notes in its Appendix A. CC-BY-4.0
+  per the document's own header.
 
-Committed observations and verdict (corpus/artifacts/g-2026-0001/)
-  Copied verbatim from research/witness/magnetar-2024-core-interior/ in
+Committed observations and verdicts
+  corpus/artifacts/g-2026-0001/ is copied verbatim from
+  research/witness/magnetar-2024-core-interior/ and
+  corpus/artifacts/g-2026-0002/ from
+  research/witness/magnetar-2024-core-interior-slim/, both in
   DrunkOnJava/rvt-rs (Apache-2.0).
+
+Witness glue (witnesses/ifc-lite/)
+  Mirrored from tools/ci/witness-ifc-lite/ in DrunkOnJava/rvt-rs
+  (Apache-2.0) at commit dbf23473e1be62cb8ed1a4fb552396c31899df9c, with the
+  manifest-reading code path adapted to this repository's §6.1 manifest
+  shape. The file headers record the same. Apache-2.0, as the upstream is.
 
 Golden artifacts
   No source or bridge bytes are redistributed by this repository. The
@@ -59,14 +72,26 @@ Golden artifacts
   each file. The referenced files
     Revit/2024_Core_Interior.rvt
     Revit/2024_Core_Interior.ifc
+    IFC Exports/2024_Core_Interior_slim.ifc
   belong to magnetar-io/revit-test-datasets and are MIT-licensed by their
-  authors. Autodesk Revit authored the .rvt and produced the .ifc export;
+  authors. Autodesk Revit authored the .rvt and produced both .ifc exports;
   Autodesk retains whatever rights attach to its exporter's output.
 
 IfcOpenShell
   Not vendored. Installed from PyPI at run time by tools/replay.sh and by the
   CI gate, and executed as a separate process. IfcOpenShell is LGPL-3.0; it is
   never linked into anything in this repository.
+
+ifc-lite-core (IFClite)
+  Not vendored. Fetched from crates.io at build time at the exact pinned
+  version 7.1.1, compiled into the witnesses/ifc-lite binary only, and
+  executed as a separate process. Upstream is LTplus-AG/ifc-lite;
+  ifc-lite-core is MPL-2.0. witnesses/ifc-lite is deliberately its own Cargo
+  workspace root and is not built by anything else here, so MPL-2.0 code is
+  never linked into an Apache-2.0 artifact. MPL-2.0 is a file-level copyleft:
+  no file of ifc-lite-core is modified by this repository, and no source of
+  it is redistributed here. Its full license text is at
+  https://github.com/LTplus-AG/ifc-lite and in the crate itself.
 
 Trademarks
   Autodesk, Revit, AutoCAD and DWG are trademarks of Autodesk, Inc. This

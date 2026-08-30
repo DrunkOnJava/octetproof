@@ -5,7 +5,7 @@
       "artifact_id": "g-2026-0001",
       "bridge_sha256": "d07c7462aee22640661faed5262cf802ce0fcbc663f312961a39be92bf857050",
       "manifest_path": "corpus/artifacts/g-2026-0001/manifest.json",
-      "manifest_sha256": "ab33a0f4918587504d083551f3eefef8ec33065268355f9d5f9b487a6436d203",
+      "manifest_sha256": "211f9ac031a251afaf008ec1fd7cc6ade30e0cbba8bafbcbd02f0a81fd40e3c7",
       "prev_hash": null,
       "source_sha256": "c805df445d613b408e37337765572021265e3f5dfdc7d1fa53b22ba1600b8014",
       "verdict_hash_sha256": "c615cc6c4606c3486be2a82af7566b4e6a5002623ffd39227f591b9df5182efa",
@@ -16,15 +16,15 @@
       "artifact_id": "g-2026-0002",
       "bridge_sha256": "bfdf36ffb0bb768f3409d818403990e64d4c262c6780603be87f8077387ad86d",
       "manifest_path": "corpus/artifacts/g-2026-0002/manifest.json",
-      "manifest_sha256": "76e218f0f74ea1d2172727240d28422238856dc38b70a20d1f62a7624915b2f8",
-      "prev_hash": "65ee5d9750b2225244ea4e2ae873fc5f6a95ae97b000c9ed82feef1412a9499e",
+      "manifest_sha256": "ceb7a332376d9876977e9932c14bc025c8852270b13da007afe5d59d6a38e86d",
+      "prev_hash": "303890d7a873c329760c42aebcc26617fdc4c94ed83e2f0fc18ce4b7a269aa2c",
       "source_sha256": "c805df445d613b408e37337765572021265e3f5dfdc7d1fa53b22ba1600b8014",
       "verdict_hash_sha256": "cd171b3167c602d0882dd8a0d38c99791012a9fe693043e43e2d43b028554325",
       "verdict_status": "PASS"
     }
   ],
   "chain_algorithm": "sha256 over JCS-lite canonical entries (sorted keys, no whitespace, UTF-8)",
-  "chain_head": "5e6a64228083a30b9c3ef667d0d6e02ad96b370954b34599c1da18850fcdad23",
+  "chain_head": "a817018fc5585963a1d66282467677ad863f85035ee709bc19393d940906f32b",
   "schema_version": "1.0.0",
   "signature": null,
   "signing_status": "not implemented — SPEC.md §12.2 requires an Ed25519 signature over the chain head; no maintainer key is published yet, so this chain is tamper-evident but not cryptographically anchored"
